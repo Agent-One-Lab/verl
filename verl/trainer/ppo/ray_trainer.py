@@ -17,7 +17,10 @@
 FSDP PPO Trainer with Ray-based single controller.
 This trainer supports model-agonistic model initialization with huggingface
 """
-
+import asyncio
+import sys
+import threading
+sys.path.append("../agents")
 import json
 import os
 import uuid
@@ -28,7 +31,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from pprint import pprint
 from typing import Dict, Optional, Type
-
+import ray
+from agents.agents.auto import AutoAgent
 import numpy as np
 import ray
 import torch
@@ -50,10 +54,12 @@ from verl.trainer.ppo.metric_utils import (
     compute_throughout_metrics,
     compute_timing_metrics,
     process_validation_metrics,
-    reduce_metrics,
 )
 from verl.trainer.ppo.reward import compute_reward, compute_reward_async
 from verl.utils.checkpoint.checkpoint_manager import find_latest_ckpt_path
+from verl.utils.metric import (
+    reduce_metrics,
+)
 from verl.utils.seqlen_balancing import get_seqlen_balanced_partitions, log_seqlen_unbalance
 from verl.utils.torch_functional import masked_mean
 from verl.utils.tracking import ValidationGenerationsLogger
@@ -148,16 +154,20 @@ def apply_kl_penalty(data: DataProto, kl_ctrl: core_algos.AdaptiveKLController, 
     token_level_scores = data.batch["token_level_scores"]
     batch_size = data.batch.batch_size[0]
 
-    if multi_turn:
-        loss_mask = data.batch["loss_mask"]
-        response_mask = loss_mask[:, -response_length:]
-    else:
-        attention_mask = data.batch["attention_mask"]
-        response_mask = attention_mask[:, -response_length:]
+    # if multi_turn:
+    #     loss_mask = data.batch["loss_mask"]
+    #     response_mask = loss_mask[:, -response_length:]
+    # else:
+    #     attention_mask = data.batch["attention_mask"]
+    #     response_mask = attention_mask[:, -response_length:]
+    attention_mask = data.batch["attention_mask"]
+    response_mask = attention_mask[:, -response_length:]
 
     # compute kl between ref_policy and current policy
     # When apply_kl_penalty, algorithm.use_kl_in_reward=True, so the reference model has been enabled.
-    kld = core_algos.kl_penalty(data.batch["old_log_probs"], data.batch["ref_log_prob"], kl_penalty=kl_penalty)  # (batch_size, response_length)
+    kld = core_algos.kl_penalty(
+        data.batch["old_log_probs"], data.batch["ref_log_prob"], kl_penalty=kl_penalty
+    )  # (batch_size, response_length)
     kld = kld * response_mask
     beta = kl_ctrl.value
 
@@ -175,24 +185,12 @@ def apply_kl_penalty(data: DataProto, kl_ctrl: core_algos.AdaptiveKLController, 
     return data, metrics
 
 
-def compute_response_mask(data: DataProto):
-    responses = data.batch["responses"]
-    response_length = responses.size(1)
-    attention_mask = data.batch["attention_mask"]
-    return attention_mask[:, -response_length:]
-
-
-def compute_advantage(data: DataProto, adv_estimator, gamma=1.0, lam=1.0, num_repeat=1, multi_turn=False, norm_adv_by_std_in_grpo=True):
-    # Back-compatible with trainers that do not compute response mask in fit
-    if "response_mask" not in data.batch:
-        data.batch["response_mask"] = compute_response_mask(data)
-    # prepare response group
-    # TODO: add other ways to estimate advantages
+def compute_advantage(data: DataProto, adv_estimator, gamma=1.0, lam=1.0, num_repeat=1, norm_adv_by_std_in_grpo=True):
     if adv_estimator == AdvantageEstimator.GAE:
         advantages, returns = core_algos.compute_gae_advantage_return(
             token_level_rewards=data.batch["token_level_rewards"],
             values=data.batch["values"],
-            response_mask=data.batch["response_mask"],
+            response_mask=data.batch["action_mask"],
             gamma=gamma,
             lam=lam,
         )
@@ -200,12 +198,12 @@ def compute_advantage(data: DataProto, adv_estimator, gamma=1.0, lam=1.0, num_re
         data.batch["returns"] = returns
     elif adv_estimator == AdvantageEstimator.GRPO:
         # TODO: test on more adv estimator type
-        grpo_calculation_mask = data.batch["response_mask"]
-        if multi_turn:
-            # If multi-turn, replace the mask with the relevant part of loss_mask
-            response_length = grpo_calculation_mask.size(1)  # Get length from the initial response mask
-            grpo_calculation_mask = data.batch["loss_mask"][:, -response_length:]  # This mask is the one intended for GRPO
-        # Call compute_grpo_outcome_advantage with parameters matching its definition
+        grpo_calculation_mask = data.batch["action_mask"]
+        # if multi_turn:
+        #     # If multi-turn, replace the mask with the relevant part of loss_mask
+        #     response_length = grpo_calculation_mask.size(1)  # Get length from the initial response mask
+        #     grpo_calculation_mask = data.batch["loss_mask"][:, -response_length:]  # This mask is the one intended for GRPO
+        # # Call compute_grpo_outcome_advantage with parameters matching its definition
         advantages, returns = core_algos.compute_grpo_outcome_advantage(
             token_level_rewards=data.batch["token_level_rewards"],
             response_mask=grpo_calculation_mask,
@@ -217,7 +215,7 @@ def compute_advantage(data: DataProto, adv_estimator, gamma=1.0, lam=1.0, num_re
     elif adv_estimator == AdvantageEstimator.REINFORCE_PLUS_PLUS_BASELINE:
         advantages, returns = core_algos.compute_reinforce_plus_plus_baseline_outcome_advantage(
             token_level_rewards=data.batch["token_level_rewards"],
-            response_mask=data.batch["response_mask"],
+            response_mask=data.batch["action_mask"],
             index=data.non_tensor_batch["uid"],
         )
         data.batch["advantages"] = advantages
@@ -225,7 +223,7 @@ def compute_advantage(data: DataProto, adv_estimator, gamma=1.0, lam=1.0, num_re
     elif adv_estimator == AdvantageEstimator.REINFORCE_PLUS_PLUS:
         advantages, returns = core_algos.compute_reinforce_plus_plus_outcome_advantage(
             token_level_rewards=data.batch["token_level_rewards"],
-            response_mask=data.batch["response_mask"],
+            response_mask=data.batch["action_mask"],
             gamma=gamma,
         )
         data.batch["advantages"] = advantages
@@ -234,7 +232,7 @@ def compute_advantage(data: DataProto, adv_estimator, gamma=1.0, lam=1.0, num_re
         advantages, returns = core_algos.compute_remax_outcome_advantage(
             token_level_rewards=data.batch["token_level_rewards"],
             reward_baselines=data.batch["reward_baselines"],
-            response_mask=data.batch["response_mask"],
+            response_mask=data.batch["action_mask"],
         )
 
         data.batch["advantages"] = advantages
@@ -242,7 +240,7 @@ def compute_advantage(data: DataProto, adv_estimator, gamma=1.0, lam=1.0, num_re
     elif adv_estimator == AdvantageEstimator.RLOO:
         advantages, returns = core_algos.compute_rloo_outcome_advantage(
             token_level_rewards=data.batch["token_level_rewards"],
-            response_mask=data.batch["response_mask"],
+            response_mask=data.batch["action_mask"],
             index=data.non_tensor_batch["uid"],
         )
         data.batch["advantages"] = advantages
@@ -288,6 +286,10 @@ class RayPPOTrainer:
         self.tokenizer = tokenizer
         self.processor = processor
         self.config = config
+        print(f"Config.Agent: {config.agent}")
+        self.agent_wrapper = AutoAgent.from_config(config.agent)
+        # set jinja template for vllm rollout
+        self.config.actor_rollout_ref.rollout.chat_template = self.agent_wrapper.jinja_template
         self.reward_fn = reward_fn
         self.val_reward_fn = val_reward_fn
 
@@ -577,7 +579,8 @@ class RayPPOTrainer:
             sample_inputs.extend(input_texts)
 
             batch_keys_to_pop = ["input_ids", "attention_mask", "position_ids"]
-            non_tensor_batch_keys_to_pop = ["raw_prompt_ids"]
+            # non_tensor_batch_keys_to_pop = ["raw_prompt_ids"]
+            non_tensor_batch_keys_to_pop = ["messages", "question", "data_source"]
             if "multi_modal_inputs" in test_batch.non_tensor_batch:
                 non_tensor_batch_keys_to_pop.extend(["multi_modal_data", "multi_modal_inputs"])
             if "raw_prompt" in test_batch.non_tensor_batch:
@@ -597,24 +600,31 @@ class RayPPOTrainer:
                 "validate": True,
             }
             print(f"test_gen_batch meta info: {test_gen_batch.meta_info}")
+            sample_inputs.extend(test_gen_batch.non_tensor_batch["question"].tolist())
 
             # pad to be divisible by dp_size
-            test_gen_batch_padded, pad_size = pad_dataproto_to_divisor(test_gen_batch, self.actor_rollout_wg.world_size)
+            # test_gen_batch_padded, pad_size = pad_dataproto_to_divisor(test_gen_batch, self.actor_rollout_wg.world_size)
             if not self.async_rollout_mode:
-                test_output_gen_batch_padded = self.actor_rollout_wg.generate_sequences(test_gen_batch_padded)
+                # test_output_gen_batch_padded = self.actor_rollout_wg.generate_sequences(test_gen_batch_padded)
+                pass
             else:
                 self.async_rollout_manager.wake_up()
-                test_output_gen_batch_padded = self.async_rollout_manager.generate_sequences(test_gen_batch_padded)
+                # test_output_gen_batch_padded = self.async_rollout_manager.generate_sequences(test_gen_batch_padded)
+                self.agent_wrapper.set_llm_engine(self.async_rollout_manager, self.tokenizer)
+                self.run_on_bg(self.agent_wrapper.run_async(max_steps=self.config.agent.max_steps, start_messages=test_gen_batch.non_tensor_batch['messages'], num_chains=1))
+                test_output_gen_batch = self.agent_wrapper.get_verl_data_proto()
                 self.async_rollout_manager.sleep()
 
-            # unpad
-            test_output_gen_batch = unpad_dataproto(test_output_gen_batch_padded, pad_size=pad_size)
-            print("validation generation end")
+            # # unpad
+            # test_output_gen_batch = unpad_dataproto(test_output_gen_batch_padded, pad_size=pad_size)
+            # print("validation generation end")
+
+
 
             # Store generated outputs
-            output_ids = test_output_gen_batch.batch["responses"]
-            output_texts = [self.tokenizer.decode(ids, skip_special_tokens=True) for ids in output_ids]
-            sample_outputs.extend(output_texts)
+            # output_ids = test_output_gen_batch.batch["responses"]
+            # output_texts = [self.tokenizer.decode(ids, skip_special_tokens=True) for ids in output_ids]
+            # sample_outputs.extend(output_texts)
 
             test_batch = test_batch.union(test_output_gen_batch)
 
@@ -648,6 +658,9 @@ class RayPPOTrainer:
             assert len(lst) == 0 or len(lst) == len(sample_scores), f"{key_info}: {len(lst)=}, {len(sample_scores)=}"
 
         data_sources = np.concatenate(data_source_lst, axis=0)
+        print(f"Reward extra infos: {reward_extra_infos_dict.keys()}")
+        for key in reward_extra_infos_dict.keys():
+            print(f"{key}: {len(reward_extra_infos_dict[key])}")
 
         data_src2var2metric2val = process_validation_metrics(data_sources, sample_inputs, reward_extra_infos_dict)
         metric_dict = {}
@@ -738,11 +751,26 @@ class RayPPOTrainer:
         self.async_rollout_mode = False
         if self.config.actor_rollout_ref.rollout.mode == "async":
             self.async_rollout_mode = True
+            self.bg_loop = asyncio.new_event_loop()
+            self.bg_thread = threading.Thread(
+                target=self.start_background_loop, args=(self.bg_loop,), daemon=True
+            )
+            self.bg_thread.start()
             self.async_rollout_manager = AsyncLLMServerManager(
                 config=self.config.actor_rollout_ref,
                 worker_group=self.actor_rollout_wg,
+                loop=self.bg_loop,
             )
 
+    # Set a background loop for all asyncio operations
+    def start_background_loop(self, loop: asyncio.AbstractEventLoop):
+        asyncio.set_event_loop(loop)          # bind to this thread
+        loop.run_forever()
+    
+    def run_on_bg(self, coro):
+        future = asyncio.run_coroutine_threadsafe(coro, self.bg_loop)
+        return future.result()
+    
     def _save_checkpoint(self):
         # path: given_path + `/global_step_{global_steps}` + `/actor`
         local_global_step_folder = os.path.join(self.config.trainer.default_local_dir, f"global_step_{self.global_steps}")
@@ -887,11 +915,11 @@ class RayPPOTrainer:
 
                 # pop those keys for generation
                 batch_keys_to_pop = ["input_ids", "attention_mask", "position_ids"]
-                non_tensor_batch_keys_to_pop = ["raw_prompt_ids"]
+                non_tensor_batch_keys_to_pop = ["messages"]
                 if "multi_modal_inputs" in batch.non_tensor_batch:
                     non_tensor_batch_keys_to_pop.extend(["multi_modal_data", "multi_modal_inputs"])
-                if "raw_prompt" in batch.non_tensor_batch:
-                    non_tensor_batch_keys_to_pop.append("raw_prompt")
+                # if "raw_prompt" in batch.non_tensor_batch:
+                #     non_tensor_batch_keys_to_pop.append("raw_prompt")
                 if "tools_kwargs" in batch.non_tensor_batch:
                     non_tensor_batch_keys_to_pop.append("tools_kwargs")
                 gen_batch = batch.pop(
@@ -908,17 +936,27 @@ class RayPPOTrainer:
                             gen_batch_output = self.actor_rollout_wg.generate_sequences(gen_batch)
                         else:
                             self.async_rollout_manager.wake_up()
-                            gen_batch_output = self.async_rollout_manager.generate_sequences(gen_batch)
+                            # gen_batch_output = self.async_rollout_manager.generate_sequences(gen_batch)
+
+                            self.agent_wrapper.set_llm_engine(self.async_rollout_manager, self.tokenizer)
+                            # Async agent rollout
+                            self.run_on_bg(self.agent_wrapper.run_async(max_steps=self.config.agent.max_steps, start_messages=gen_batch.non_tensor_batch["messages"], num_chains=self.config.agent.num_chains))
+                            gen_batch_output = self.agent_wrapper.get_verl_data_proto()
                             self.async_rollout_manager.sleep()
 
                     if self.config.algorithm.adv_estimator == AdvantageEstimator.REMAX:
                         with _timer("gen_max", timing_raw):
                             gen_baseline_batch = deepcopy(gen_batch)
                             gen_baseline_batch.meta_info["do_sample"] = False
-                            gen_baseline_output = self.actor_rollout_wg.generate_sequences(gen_baseline_batch)
+                            # gen_baseline_output = self.actor_rollout_wg.generate_sequences(gen_baseline_batch)
+                            self.async_rollout_manager.wake_up()
+                            self.agent_wrapper.set_llm_engine(self.async_rollout_manager, self.tokenizer)
+                            self.run_on_bg(self.agent_wrapper.run_async(max_steps=self.config.agent.max_steps, start_messages=gen_batch.non_tensor_batch["messages"], num_chains=1))
+                            gen_baseline_output = self.agent_wrapper.get_verl_data_proto()
+                            self.async_rollout_manager.sleep()
 
                             batch = batch.union(gen_baseline_output)
-                            reward_baseline_tensor = self.reward_fn(batch)
+                            reward_baseline_tensor = gen_baseline_output.batch["rm_scores"]
                             reward_baseline_tensor = reward_baseline_tensor.sum(dim=-1)
 
                             batch.pop(batch_keys=list(gen_baseline_output.batch.keys()))
@@ -927,17 +965,17 @@ class RayPPOTrainer:
 
                             del gen_baseline_batch, gen_baseline_output
 
-                    batch.non_tensor_batch["uid"] = np.array([str(uuid.uuid4()) for _ in range(len(batch.batch))], dtype=object)
+                    # batch.non_tensor_batch["uid"] = np.array([str(uuid.uuid4()) for _ in range(len(batch.batch))], dtype=object)
                     # repeat to align with repeated responses in rollout
-                    batch = batch.repeat(repeat_times=self.config.actor_rollout_ref.rollout.n, interleave=True)
+                    batch = batch.repeat(repeat_times=self.config.agent.num_chains, interleave=False)
                     batch = batch.union(gen_batch_output)
 
-                    batch.batch["response_mask"] = compute_response_mask(batch)
+                    # batch.batch["response_mask"] = compute_response_mask(batch)
                     # balance the number of valid tokens on each dp rank.
                     # Note that this breaks the order of data inside the batch.
                     # Please take care when you implement group based adv computation such as GRPO and rloo
-                    if self.config.trainer.balance_batch:
-                        self._balance_batch(batch, metrics=metrics)
+                    # if self.config.trainer.balance_batch:
+                    #     self._balance_batch(batch, metrics=metrics)
 
                     # compute global_valid tokens
                     batch.meta_info["global_token_num"] = torch.sum(batch.batch["attention_mask"], dim=-1).tolist()
@@ -957,7 +995,7 @@ class RayPPOTrainer:
                     with _timer("old_log_prob", timing_raw):
                         old_log_prob = self.actor_rollout_wg.compute_log_prob(batch)
                         entropys = old_log_prob.batch["entropys"]
-                        response_masks = batch.batch["response_mask"]
+                        response_masks = batch.batch["action_mask"][:, :-1]
                         loss_agg_mode = self.config.actor_rollout_ref.actor.loss_agg_mode
                         entropy_loss = agg_loss(loss_mat=entropys, loss_mask=response_masks, loss_agg_mode=loss_agg_mode)
                         old_log_prob_metrics = {"actor/entropy_loss": entropy_loss.detach().item()}
@@ -1006,7 +1044,6 @@ class RayPPOTrainer:
                             lam=self.config.algorithm.lam,
                             num_repeat=self.config.actor_rollout_ref.rollout.n,
                             norm_adv_by_std_in_grpo=norm_adv_by_std_in_grpo,
-                            multi_turn=self.config.actor_rollout_ref.rollout.multi_turn.enable,
                         )
 
                     # update critic

@@ -33,11 +33,14 @@ class NaiveRewardManager:
         """We will expand this function gradually based on the available datasets"""
 
         # If there is rm score, we directly return rm score. Otherwise, we compute via rm_score_fn
-        if "rm_scores" in data.batch.keys():
-            if return_dict:
-                return {"reward_tensor": data.batch["rm_scores"]}
-            else:
-                return data.batch["rm_scores"]
+        reward_extra_info = defaultdict(list)
+        if return_dict:
+            for key in data.non_tensor_batch.keys():
+                if key.startswith("rm_"):
+                    reward_extra_info[key[3:]].extend(data.non_tensor_batch[key].tolist())
+            return {"reward_tensor": data.batch["rm_scores"], "reward_extra_info": reward_extra_info}
+        else:
+            return data.batch["rm_scores"]
 
         reward_tensor = torch.zeros_like(data.batch["responses"], dtype=torch.float32)
         reward_extra_info = defaultdict(list)

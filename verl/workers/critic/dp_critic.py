@@ -52,7 +52,7 @@ class DataParallelPPOCritic(BasePPOCritic):
         self.ulysses_sequence_parallel_size = self.config.get("ulysses_sequence_parallel_size", 1)
 
     def _forward_micro_batch(self, micro_batch):
-        response_length = micro_batch["responses"].size(-1)
+        # response_length = micro_batch["responses"].size(-1)
         multi_modal_inputs = {}
         if "multi_modal_inputs" in micro_batch:
             for key in micro_batch["multi_modal_inputs"][0].keys():
@@ -107,7 +107,8 @@ class DataParallelPPOCritic(BasePPOCritic):
                     use_cache=False,
                 )  # prevent model thinks we are generating
                 values = output.logits
-                values = values[:, -response_length - 1 : -1].squeeze(-1)
+                values = values.squeeze(-1)
+                # values = values[:, -response_length - 1 : -1].squeeze(-1)
             return values
 
     def _optimizer_step(self):
@@ -132,7 +133,7 @@ class DataParallelPPOCritic(BasePPOCritic):
     def compute_values(self, data: DataProto) -> torch.Tensor:
         self.critic_module.eval()
         micro_batch_size = data.meta_info["micro_batch_size"]
-        select_keys = ["responses", "input_ids", "attention_mask", "position_ids"]
+        select_keys = ["input_ids", "attention_mask", "action_mask", "position_ids"]
         batch = data.select(batch_keys=select_keys).batch
         use_dynamic_bsz = data.meta_info["use_dynamic_bsz"]
         has_multi_modal_inputs = "multi_modal_inputs" in data.non_tensor_batch.keys()
@@ -157,16 +158,18 @@ class DataParallelPPOCritic(BasePPOCritic):
                 values = self._forward_micro_batch(micro_batch)
             values_lst.append(values)
         values = torch.concat(values_lst, dim=0)
-        responses = data.batch["responses"]
+        # responses = data.batch["responses"]
         attention_mask = data.batch["attention_mask"]
-        response_length = responses.size(1)
+        action_mask = data.batch["action_mask"]
+        # response_length = responses.size(1)
 
         if use_dynamic_bsz:
             indices = list(itertools.chain.from_iterable(indices))
             assert len(indices) == values.size(0), f"{len(indices)} vs. {values.size()}"
             revert_indices = torch.tensor(get_reverse_idx(indices), dtype=torch.long)
             values = values[revert_indices]
-        values = values * attention_mask[:, -response_length - 1 : -1]
+        # values = values * attention_mask[:, -response_length - 1 : -1]
+        values = values * action_mask
         return values
 
     @GPUMemoryLogger(role="dp critic", logger=logger)
@@ -175,7 +178,7 @@ class DataParallelPPOCritic(BasePPOCritic):
         self.critic_module.train()
         metrics = {}
 
-        select_keys = ["input_ids", "responses", "attention_mask", "position_ids", "values", "returns"]
+        select_keys = ["input_ids", "attention_mask", "action_mask", "position_ids", "values", "returns"]
         batch = data.select(batch_keys=select_keys).batch
         has_multi_modal_inputs = "multi_modal_inputs" in data.non_tensor_batch.keys()
 
@@ -210,13 +213,14 @@ class DataParallelPPOCritic(BasePPOCritic):
                         data = {**data.batch.to(torch.cuda.current_device()), **data.non_tensor_batch}
                     else:
                         data = data.to(torch.cuda.current_device())  # critic device is cpu when using offload
-                    responses = data["responses"]
+                    # responses = data["responses"]
                     attention_mask = data["attention_mask"]
+                    action_mask = data["action_mask"]
                     values = data["values"]
                     returns = data["returns"]
-                    response_length = responses.size(1)
+                    # response_length = responses.size(1)
 
-                    response_mask = attention_mask[:, -response_length - 1 : -1]
+                    # response_mask = attention_mask[:, -response_length - 1 : -1]
 
                     vpreds = self._forward_micro_batch(data)
 
@@ -226,7 +230,7 @@ class DataParallelPPOCritic(BasePPOCritic):
                         vpreds=vpreds,
                         values=values,
                         returns=returns,
-                        response_mask=response_mask,
+                        response_mask=action_mask,
                         cliprange_value=self.config.cliprange_value,
                     )
                     if self.config.use_dynamic_bsz:
@@ -240,7 +244,7 @@ class DataParallelPPOCritic(BasePPOCritic):
                     data = {
                         "critic/vf_loss": vf_loss.detach().item(),
                         "critic/vf_clipfrac": vf_clipfrac.detach().item(),
-                        "critic/vpred_mean": masked_mean(vpreds, response_mask).detach().item(),
+                        "critic/vpred_mean": masked_mean(vpreds, action_mask).detach().item(),
                     }
 
                     append_to_dict(metrics, data)

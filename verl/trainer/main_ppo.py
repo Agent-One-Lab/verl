@@ -14,12 +14,11 @@
 """
 Note that we don't combine the main with ray_trainer as ray_trainer is used by other main.
 """
-
+import sys
+sys.path.append("..")
 import os
-
 import hydra
 import ray
-
 from verl.trainer.ppo.ray_trainer import RayPPOTrainer
 from verl.trainer.ppo.reward import load_reward_manager
 
@@ -196,7 +195,7 @@ def create_rl_dataset(data_paths, data_config, tokenizer, processor):
     """
     from torch.utils.data import Dataset
 
-    from verl.utils.dataset.rl_dataset import RLHFDataset
+    from verl.utils.dataset.rl_dataset import RLHFAgentDataset
 
     if "custom_cls" in data_config and data_config.custom_cls.get("path", None) is not None:
         from verl.utils.import_utils import load_extern_type
@@ -205,7 +204,7 @@ def create_rl_dataset(data_paths, data_config, tokenizer, processor):
         if not issubclass(dataset_cls, Dataset):
             raise TypeError(f"The custom dataset class '{data_config.custom_cls.name}' from '{data_config.custom_cls.path}' must inherit from torch.utils.data.Dataset")
     else:
-        dataset_cls = RLHFDataset
+        dataset_cls = RLHFAgentDataset
     print(f"Using dataset class: {dataset_cls.__name__}")
 
     dataset = dataset_cls(

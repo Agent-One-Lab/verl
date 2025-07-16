@@ -31,6 +31,7 @@ from cachetools import LRUCache
 from omegaconf import DictConfig
 from openai import AsyncOpenAI
 from openai.types.chat.chat_completion import ChatCompletion
+from openai.types.completion import Completion
 from starlette.requests import Request
 
 from verl.protocol import DataProto
@@ -38,7 +39,8 @@ from verl.single_controller.ray.base import RayWorkerGroup
 from verl.utils import hf_tokenizer
 from verl.utils.fs import copy_to_local
 
-logger = logging.getLogger(__file__)
+LOGGER = logging.getLogger(__file__)
+LOGGER.setLevel(os.environ.get("VERL_LOGGING_LEVEL", "INFO"))
 
 
 def _get_free_port():
@@ -69,7 +71,10 @@ class AsyncServerBase(ABC):
             os._exit(-1)
 
         app = fastapi.FastAPI(lifespan=lifespan)
+        # if "qwen2.5-vl" in self.config.model.path.lower():
         app.router.add_api_route("/v1/chat/completions", self.chat_completion, methods=["POST"])
+        # else:
+        #     app.router.add_api_route("/v1/completions", self.completion, methods=["POST"])
 
         self.port = _get_free_port()
         config = uvicorn.Config(app, host=["::", "0.0.0.0"], port=self.port, log_level="warning")
@@ -90,6 +95,14 @@ class AsyncServerBase(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def completion(self, raw_request: Request):
+        """OpenAI completion API.
+
+        API reference: https://platform.openai.com/docs/api-reference/completions/create
+        """
+        raise NotImplementedError
+
+    @abstractmethod
     async def init_engine(self):
         """Init async LLM engine."""
         raise NotImplementedError
@@ -104,6 +117,128 @@ class AsyncServerBase(ABC):
         """Sleep engine to offload model weights and discard kv cache."""
         raise NotImplementedError
 
+
+class CompletionScheduler:
+    def __init__(
+        self,
+        config: DictConfig,
+        model_path: str,
+        server_addresses: List[str],
+        max_cache_size: int = 10000,
+    ):
+        """
+        Args:
+            config: DictConfig, rollout config.
+            model_path: str, model path.
+            server_addresses: List[str], server addresses.
+            max_cache_size: int, max cache size of request_id to address mapping.
+        """
+        self.config = config
+        self.model_name = "/".join(model_path.split("/")[-2:])
+        local_path = copy_to_local(model_path)
+        self.tokenizer = hf_tokenizer(local_path, trust_remote_code=True)
+
+        # Least requests load balancing
+        self.weighted_addresses = [[0, address] for address in server_addresses]
+        heapq.heapify(self.weighted_addresses)
+
+        # LRU cache to map request_id to address
+        self.request_id_to_address = LRUCache(maxsize=max_cache_size)
+
+        self.debug_has_printed = False
+
+    async def submit_completions(
+        self,
+        callback: Callable[[Completion, Dict[str, Any], Exception], None],
+        callback_additional_info: Dict[str, Any],
+        **complete_request,
+    ):
+        """
+        Submit a chat completion request to the server with the least number of requests.
+
+        Args:
+            callback: Callable[[ChatCompletion, Dict[str, Any], Exception], None], async callback function
+                to handle the response. The callback function should have the following signature:
+
+                ```python
+                async def callback(completions: ChatCompletion, info: Dict[str, Any], exception: Exception):
+                    ...
+                ```
+                - completions: chat completion response from server.
+                - info: user provided `callback_additional_info`.
+                - exception: exception raise from OpenAI client if request failed, otherwise None.
+
+                **CAUTION**: the callback function must be async and non-blocking, if you have any blocking operation,
+                please move to seperate thread or process pool to avoid blocking the event loop.
+
+            callback_additional_info: Dict[str, Any], additional info to pass to the callback function.
+
+            **chat_complete_request: dict, request parameters same as OpenAI AsyncCompletions.create.
+                OpenAI API reference: https://platform.openai.com/docs/api-reference/chat/create
+        """
+        if "extra_headers" not in complete_request:
+            complete_request["extra_headers"] = {}
+
+        extra_headers = complete_request["extra_headers"]
+        request_id = extra_headers.get("x-request-id", None)
+        if request_id:
+            if request_id.startswith("cmpl-"):
+                request_id = request_id[len("cmpl-") :]
+                extra_headers["x-request-id"] = request_id
+
+            address = self.request_id_to_address.pop(request_id)
+        else:
+            address = self.weighted_addresses[0][1]
+            self.weighted_addresses[0][0] += 1
+            heapq.heapreplace(self.weighted_addresses, self.weighted_addresses[0])
+
+        # use new request_id to avoid duplicate request_id problem
+        request_id = uuid4().hex
+        self.request_id_to_address[request_id] = address
+        complete_request["extra_headers"]["x-request-id"] = request_id
+
+        completions, exception = None, None
+        try:
+            # TODO: OpenAI client uses httpx, seems to have performance issue in high concurrency requests.
+            completions = await self._completions_openai(address, **complete_request)
+            if not self.debug_has_printed:
+                # print(f"[CompletionScheduler] _completions_openai completions: {completions}")
+                self.debug_has_printed = True
+        except Exception as e:
+            # Let user handle the exception
+            # print(f"[CompletionScheduler] _completions_openai exception: {e}")
+            # raise RuntimeError(f"[CompletionScheduler] _completions_openai exception: {e}")
+            exception = e
+
+        await callback(completions, callback_additional_info, exception)
+
+    async def _completions_openai(self, address: str, **complete_request) -> Completion:
+        client = AsyncOpenAI(
+            base_url=f"http://{address}/v1",
+            api_key="token-abc123",
+            timeout=None,
+            max_retries=0
+        )
+        results = await client.completions.create(**complete_request)
+        
+        return results
+
+    async def _completions_aiohttp(self, address: str, **complete_request) -> Completion:
+        try:
+            session = aiohttp.ClientSession()
+            async with session.post(
+                url=f"http://{address}/v1/completions",
+                headers={"Authorization": "Bearer token-abc123"},
+                json=complete_request,
+            ) as resp:
+                data = await resp.json()
+                return Completion(**data)
+        finally:
+            await session.close()
+
+    async def generate_sequences(self, prompts: DataProto, **sampling_params) -> DataProto:
+        raise NotImplementedError
+    
 
 class ChatCompletionScheduler:
     def __init__(
@@ -186,9 +321,11 @@ class ChatCompletionScheduler:
         try:
             # TODO: OpenAI client uses httpx, seems to have performance issue in high concurrency requests.
             completions = await self._chat_completions_openai(address, **chat_complete_request)
+            LOGGER.debug(f"[ChatCompletionScheduler] callback completions: {completions}")
         except Exception as e:
             # Let user handle the exception
             exception = e
+            LOGGER.debug(f"[ChatCompletionScheduler] callback exception: {exception}")
 
         await callback(completions, callback_additional_info, exception)
 
@@ -196,6 +333,8 @@ class ChatCompletionScheduler:
         client = AsyncOpenAI(
             base_url=f"http://{address}/v1",
             api_key="token-abc123",
+            timeout=None,
+            max_retries=0
         )
         return await client.chat.completions.create(**chat_complete_request)
 
@@ -219,7 +358,7 @@ class ChatCompletionScheduler:
 class AsyncLLMServerManager:
     """AsyncLLMServerManager manage a group of vllm instances, i.e AsyncvLLMServer."""
 
-    def __init__(self, config: DictConfig, worker_group: RayWorkerGroup, *, scheduler_kwargs: Dict[str, Any] = None):
+    def __init__(self, config: DictConfig, worker_group: RayWorkerGroup, *, scheduler_kwargs: Dict[str, Any] = None, loop: asyncio.AbstractEventLoop = None):
         """Initialize AsyncLLMServerManager.
 
         Args:
@@ -248,6 +387,8 @@ class AsyncLLMServerManager:
         # Start all server instances, restart if address already in use.
         unready_dp_ranks = set(range(self.rollout_dp_size))
         while len(unready_dp_ranks) > 0:
+            # print("workers_info", workers_info)
+            # raise Exception("stop here")
             servers = {
                 rollout_dp_rank: server_class.options(
                     # make sure AsyncvLLMServer colocates with its corresponding workers
@@ -274,16 +415,22 @@ class AsyncLLMServerManager:
         ray.get([server.init_engine.remote() for server in self.async_llm_servers])
 
         # Init user provided chat scheduler in sperate thread.
-        self.chat_scheduler: ChatCompletionScheduler = None
-        self.chat_scheduler_loop = None
+        self.chat_scheduler: ChatCompletionScheduler | CompletionScheduler = None
+        self.chat_scheduler_loop = loop
         self.chat_scheduler_ready = threading.Event()
         self.chat_scheduler_thread = threading.Thread(target=self._init_chat_scheduler, daemon=True)
         self.chat_scheduler_thread.start()
         self.chat_scheduler_ready.wait()
 
     def _init_chat_scheduler(self):
-        self.chat_scheduler_loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(self.chat_scheduler_loop)
+        # self.chat_scheduler_loop = asyncio.new_event_loop()
+        # self.chat_scheduler_loop = asyncio.get_running_loop()
+        set_new_loop = False
+        if self.chat_scheduler_loop is None:
+            self.chat_scheduler_loop = asyncio.new_event_loop()
+            set_new_loop = True
+        else:
+            asyncio.set_event_loop(self.chat_scheduler_loop)
 
         module_path, class_name = self.config.rollout.chat_scheduler.rsplit(".", 1)
         module = importlib.import_module(module_path)
@@ -294,9 +441,9 @@ class AsyncLLMServerManager:
             server_addresses=self.server_addresses,
             **self.scheduler_kwargs,
         )
-
         self.chat_scheduler_ready.set()
-        self.chat_scheduler_loop.run_forever()
+        if set_new_loop:
+            self.chat_scheduler_loop.run_forever()
 
     def wake_up(self):
         """Wake up all vllm instances."""
@@ -334,6 +481,11 @@ class AsyncLLMServerManager:
 
         future = asyncio.run_coroutine_threadsafe(self.chat_scheduler.generate_sequences(prompts, **sampling_params), self.chat_scheduler_loop)
         return future.result()
+
+    async def generate_sequences_async(self, prompts: DataProto, **sampling_params) -> str:
+        """Generate a sequence via chat scheduler."""
+        assert self.chat_scheduler is not None, "chat scheduler is not initialized."
+        return await self.chat_scheduler.generate_sequences(prompts, **sampling_params)
 
 
 def async_server_class(rollout_backend: str) -> Type[AsyncServerBase]:

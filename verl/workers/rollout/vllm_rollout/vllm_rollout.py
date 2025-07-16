@@ -215,6 +215,12 @@ class vLLMRollout(BaseRollout):
                 "n": 1,  # if validate, already repeat in ray_trainer
             }
 
+        # Overwrite default settings for Agent Rollout
+        kwargs.update({
+            "n": prompts.meta_info.get('n', 1),
+            "temperature": prompts.meta_info.get('temperature', 1.0),
+        })
+        batch_size = batch_size * prompts.meta_info.get('n', 1)
         # users can customize different sampling_params at different run
         with self.update_sampling_params(**kwargs):
             output = self.inference_engine.generate(
@@ -234,32 +240,33 @@ class vLLMRollout(BaseRollout):
                 # log_probs = pad_sequence_to_length(log_probs, self.config.response_length, self.pad_token_id)
 
             # utilize current sampling params
-            if self.sampling_params.n > 1 and do_sample:
-                idx = idx.repeat_interleave(self.sampling_params.n, dim=0)
-                attention_mask = attention_mask.repeat_interleave(self.sampling_params.n, dim=0)
-                position_ids = position_ids.repeat_interleave(self.sampling_params.n, dim=0)
-                batch_size = batch_size * self.sampling_params.n
-            seq = torch.cat([idx, response], dim=-1)
+            # if self.sampling_params.n > 1 and do_sample:
+            #     idx = idx.repeat_interleave(self.sampling_params.n, dim=0)
+            #     attention_mask = attention_mask.repeat_interleave(self.sampling_params.n, dim=0)
+            #     position_ids = position_ids.repeat_interleave(self.sampling_params.n, dim=0)
+            #     batch_size = batch_size * self.sampling_params.n
+            # seq = torch.cat([idx, response], dim=-1)
 
-        response_length = response.size(1)
-        delta_position_id = torch.arange(1, response_length + 1, device=position_ids.device)
-        delta_position_id = delta_position_id.unsqueeze(0).repeat(batch_size, 1)
+        # response_length = response.size(1)
+        # delta_position_id = torch.arange(1, response_length + 1, device=position_ids.device)
+        # delta_position_id = delta_position_id.unsqueeze(0).repeat(batch_size, 1)
 
         # TODO(sgm): fix position_ids on right_pad
         # prompt: left pad + response: right pad
         # attention_mask: [0,0,0,0,1,1,1,1, | 1,1,1,0,0,0,0,0]
         # position_ids:   [0,0,0,0,0,1,2,3, | 4,5,6,7,8,9,10,11]
-        response_position_ids = position_ids[:, -1:] + delta_position_id
-        position_ids = torch.cat([position_ids, response_position_ids], dim=-1)
-        response_attention_mask = get_response_mask(response_id=response, eos_token=eos_token_id, dtype=attention_mask.dtype)
-        attention_mask = torch.cat((attention_mask, response_attention_mask), dim=-1)
+        # response_position_ids = position_ids[:, -1:] + delta_position_id
+        # position_ids = torch.cat([position_ids, response_position_ids], dim=-1)
+        # response_attention_mask = get_response_mask(response_id=response, eos_token=eos_token_id, dtype=attention_mask.dtype)
+        # attention_mask = torch.cat((attention_mask, response_attention_mask), dim=-1)
 
+        ### For agent rollout, we only need 'response'
         # all the tp ranks should contain the same data here. data in all ranks are valid
         batch = TensorDict(
             {
                 "prompts": idx,
                 "responses": response,
-                "input_ids": seq,  # here input_ids become the whole sentences
+                # "input_ids": seq,  # here input_ids become the whole sentences
                 # 'old_log_probs': log_probs, # we will recompute old log prob with actor
                 "attention_mask": attention_mask,
                 "position_ids": position_ids,

@@ -67,7 +67,7 @@ class DataParallelPPOActor(BasePPOActor):
             entropy: # (bs, response_len)
             log_probs: # (bs, response_len)
         """
-        response_length = micro_batch["responses"].size(-1)
+        # response_length = micro_batch["responses"].size(-1)
         multi_modal_inputs = {}
         if "multi_modal_inputs" in micro_batch:
             for key in micro_batch["multi_modal_inputs"][0].keys():
@@ -77,6 +77,7 @@ class DataParallelPPOActor(BasePPOActor):
             input_ids = micro_batch["input_ids"]
             batch_size, seqlen = input_ids.shape
             attention_mask = micro_batch["attention_mask"]
+            action_mask = micro_batch["action_mask"]
             position_ids = micro_batch["position_ids"]
             entropy = None
             if position_ids.dim() == 3:  # qwen2vl mrope
@@ -135,10 +136,14 @@ class DataParallelPPOActor(BasePPOActor):
                     full_entropy = pad_input(hidden_states=entropy_rmpad.unsqueeze(-1), indices=indices, batch=batch_size, seqlen=seqlen)
                 full_log_probs = pad_input(hidden_states=log_probs.unsqueeze(-1), indices=indices, batch=batch_size, seqlen=seqlen)
 
-                # only return response part:
+                # # only return response part:
+                # if calculate_entropy:
+                #     entropy = full_entropy.squeeze(-1)[:, -response_length - 1 : -1]  # (bsz, response_length)
+                # log_probs = full_log_probs.squeeze(-1)[:, -response_length - 1 : -1]  # (bsz, response_length)
                 if calculate_entropy:
-                    entropy = full_entropy.squeeze(-1)[:, -response_length - 1 : -1]  # (bsz, response_length)
-                log_probs = full_log_probs.squeeze(-1)[:, -response_length - 1 : -1]  # (bsz, response_length)
+                    entropy = full_entropy.squeeze(-1)[:, : -1]  # (bsz, seq_len)
+                log_probs = full_log_probs.squeeze(-1)[:, : -1]  # (bsz, seq_len)
+
 
             else:  # not using rmpad and no ulysses sp
                 output = self.actor_module(
@@ -150,10 +155,13 @@ class DataParallelPPOActor(BasePPOActor):
                 )  # prevent model thinks we are generating
                 logits = output.logits
                 logits.div_(temperature)
-                logits = logits[:, -response_length - 1 : -1, :]  # (bsz, response_length, vocab_size)
-                log_probs = logprobs_from_logits(logits, micro_batch["responses"])
+                # logits = logits[:, -response_length - 1 : -1, :]  # (bsz, response_length, vocab_size)
+                logits = logits[:, :-1, :]
+                # log_probs = logprobs_from_logits(logits, micro_batch["responses"])
+                log_probs = logprobs_from_logits(logits, micro_batch["input_ids"][:, 1:])
                 if calculate_entropy:
-                    entropy = verl_F.entropy_from_logits(logits)  # (bsz, response_length)
+                    # entropy = verl_F.entropy_from_logits(logits)  # (bsz, response_length)
+                    entropy = verl_F.masked_entropy_from_logits(logits, action_mask[:, :-1])
 
             return entropy, log_probs
 
@@ -201,7 +209,7 @@ class DataParallelPPOActor(BasePPOActor):
         temperature = data.meta_info["temperature"]  # temperature must be in the data.meta_info to avoid silent error
         use_dynamic_bsz = data.meta_info["use_dynamic_bsz"]
 
-        select_keys = ["responses", "input_ids", "attention_mask", "position_ids"]
+        select_keys = ["input_ids", "attention_mask", "action_mask", "position_ids"]
         batch = data.select(batch_keys=select_keys).batch
         has_multi_modal_inputs = "multi_modal_inputs" in data.non_tensor_batch.keys()
 
@@ -247,9 +255,9 @@ class DataParallelPPOActor(BasePPOActor):
         temperature = data.meta_info["temperature"]  # temperature must be in the data.meta_info to avoid silent error
         multi_turn = data.meta_info.get("multi_turn", False)
 
-        select_keys = ["responses", "input_ids", "attention_mask", "position_ids", "old_log_probs", "advantages"]
-        if multi_turn:
-            select_keys.append("loss_mask")
+        select_keys = ["input_ids", "attention_mask", "action_mask", "position_ids", "old_log_probs", "advantages"]
+        # if multi_turn:
+        #     select_keys.append("loss_mask")
         if self.config.use_kl_loss:
             select_keys.append("ref_log_prob")
         batch = data.select(batch_keys=select_keys).batch
@@ -289,16 +297,17 @@ class DataParallelPPOActor(BasePPOActor):
                         data = {**data.batch.to(torch.cuda.current_device()), **data.non_tensor_batch}
                     else:
                         data = data.to(torch.cuda.current_device())  # actor device is cpu when using offload
-                    responses = data["responses"]
-                    response_length = responses.size(1)
-                    attention_mask = data["attention_mask"]
-                    if multi_turn:
-                        response_mask = data["loss_mask"][:, -response_length:]
-                    else:
-                        response_mask = attention_mask[:, -response_length:]
+                    # responses = data["responses"]
+                    # response_length = responses.size(1)
+                    # attention_mask = data["attention_mask"]
+                    # if multi_turn:
+                    #     response_mask = data["loss_mask"][:, -response_length:]
+                    # else:
+                    #     response_mask = attention_mask[:, -response_length:]
 
                     old_log_prob = data["old_log_probs"]
-                    advantages = data["advantages"]
+                    advantages = data["advantages"][:, :-1] # TODO: check whether [:, :-1] or [:, 1:]
+                    action_mask = data['action_mask'][:, :-1]
 
                     clip_ratio = self.config.clip_ratio
                     clip_ratio_low = self.config.clip_ratio_low if self.config.clip_ratio_low is not None else clip_ratio
@@ -317,7 +326,7 @@ class DataParallelPPOActor(BasePPOActor):
                         old_log_prob=old_log_prob,
                         log_prob=log_prob,
                         advantages=advantages,
-                        response_mask=response_mask,
+                        response_mask=action_mask,
                         cliprange=clip_ratio,
                         cliprange_low=clip_ratio_low,
                         cliprange_high=clip_ratio_high,
@@ -326,7 +335,7 @@ class DataParallelPPOActor(BasePPOActor):
                     )
 
                     if entropy_coeff != 0:
-                        entropy_loss = agg_loss(loss_mat=entropy, loss_mask=response_mask, loss_agg_mode=loss_agg_mode)
+                        entropy_loss = agg_loss(loss_mat=entropy, loss_mask=action_mask, loss_agg_mode=loss_agg_mode)
 
                         # compute policy loss
                         policy_loss = pg_loss - entropy_loss * entropy_coeff
@@ -337,7 +346,7 @@ class DataParallelPPOActor(BasePPOActor):
                         ref_log_prob = data["ref_log_prob"]
                         # compute kl loss
                         kld = kl_penalty(logprob=log_prob, ref_logprob=ref_log_prob, kl_penalty=self.config.kl_loss_type)
-                        kl_loss = agg_loss(loss_mat=kld, loss_mask=response_mask, loss_agg_mode=self.config.loss_agg_mode)
+                        kl_loss = agg_loss(loss_mat=kld, loss_mask=action_mask, loss_agg_mode=self.config.loss_agg_mode)
 
                         policy_loss = policy_loss + kl_loss * self.config.kl_loss_coef
                         metrics["actor/kl_loss"] = kl_loss.detach().item()

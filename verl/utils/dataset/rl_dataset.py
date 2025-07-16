@@ -14,7 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import base64
 import copy
+import io
+import json
 import logging
 import os
 import re
@@ -27,9 +30,10 @@ import torch
 from omegaconf import DictConfig, ListConfig
 from torch.utils.data import Dataset
 from transformers import PreTrainedTokenizer, ProcessorMixin
-
+import pandas as pd
 import verl.utils.torch_functional as verl_F
 from verl.utils.model import compute_position_id_with_mask
+from PIL import Image
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +57,19 @@ def collate_fn(data_list: list[dict]) -> dict:
         non_tensors[key] = np.array(val, dtype=object)
 
     return {**tensors, **non_tensors}
+
+def convert_parquet_to_json(parquet_file: str, json_file: str):
+    df = pd.read_parquet(parquet_file)
+    records = df.to_dict(orient='records')
+    with open(json_file, 'w', encoding='utf-8') as f:
+        json.dump(records, f, ensure_ascii=False, indent=2)
+
+
+def pil_to_data_uri(img: Image.Image, fmt="PNG") -> str:
+    buf = io.BytesIO()
+    img.save(buf, format=fmt)
+    b64 = base64.b64encode(buf.getvalue()).decode()
+    return f"data:image/{fmt.lower()};base64,{b64}"
 
 
 class RLHFDataset(Dataset):
@@ -262,3 +279,139 @@ class RLHFDataset(Dataset):
             return state
 
         return self.__dict__.copy()
+
+
+class RLHFAgentDataset(Dataset):
+    def __init__(self,
+        data_files: Union[str, List[str]],
+        tokenizer: PreTrainedTokenizer,
+        processor = None, # Compatible with verl
+        config = None # Compatible with verl
+    ):
+        # print(f'data_files: {data_files}')
+        self.tokenizer = tokenizer
+        self.data_files = copy.deepcopy(data_files)
+        self.data = []
+        self.sources = []
+        self.truncation = "error"
+        if isinstance(self.data_files, str):
+            self.data_files = [self.data_files]
+        elif isinstance(self.data_files, list):
+            self.data_files = [f for f in self.data_files]
+        else:
+            raise ValueError(f"Unsupported data_files type: {type(self.data_files)}")
+        # for i, data_file in enumerate(self.data_files):
+        #     self.data.extend(json.load(open(data_file)))
+        #     file_name = os.path.basename(data_file)
+        #     self.sources.extend([file_name] * len(json.load(open(data_file))))
+        self._read_data()
+
+        
+
+    def _read_data(self):
+        # self._convert_parquet_to_json(self.data_files)
+        # json_files = [f for f in self.data_files if f.endswith('.json')]
+
+        # if json_files:
+        #     for json_file in json_files:
+        #         with open(json_file, 'r', encoding='utf-8') as f:
+        #             json_data = json.load(f)
+        #             self.data.extend(json_data)
+        #             file_name = os.path.basename(json_file)
+        #             self.sources.extend([file_name] * len(json_data))
+        for data_file in self.data_files:
+            if data_file.endswith('.parquet'):
+                df = pd.read_parquet(data_file)
+                self.data.extend(df.to_dict(orient='records'))
+                self.sources.extend([os.path.basename(data_file)] * len(df))
+            elif data_file.endswith('.json'):
+                with open(data_file, 'r', encoding='utf-8') as f:
+                    json_data = json.load(f)
+                    self.data.extend(json_data)
+                    self.sources.extend([os.path.basename(data_file)] * len(json_data))
+            else:
+                raise ValueError(f"Unsupported file type: {data_file}")
+        print(f"dataset len: {len(self.data)}")
+
+    def _convert_parquet_to_json(self, files):
+        json_files = []
+        for file in files:
+            if file.endswith('.parquet'):
+                json_path = file.replace('.parquet', '.converted.json')
+                if not os.path.exists(json_path):
+                    convert_parquet_to_json(file, json_path)
+                json_files.append(json_path)
+            else:
+                json_files.append(file)
+        return json_files
+
+    def __len__(self):
+        return len(self.data)
+    
+    def _build_messages(self, row_dict):
+        question_keys = ['question', 'problem']
+        for key in question_keys:
+            question = None
+            if key in row_dict:
+                question = row_dict[key]
+                break
+        if question is None:
+            raise ValueError(f"question not found in row_dict: {row_dict}")
+        
+        if "image" in row_dict:
+            from verl.utils.dataset.vision_utils import process_image
+            image = process_image(row_dict["image"])
+            image = pil_to_data_uri(image)
+            # convert PIL Image to base64
+            # buffer = io.BytesIO()
+            # image.save(buffer, format="PNG")
+            # image = base64.b64encode(buffer.getvalue()).decode("utf-8")
+            
+        else:
+            image = None
+        
+        single_messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": question}
+                ]
+            }
+        ]
+        if image is not None:
+            # OpenAI chat completion API only supports image_url
+            single_messages[0]["content"].append({"type": "image_url", "image_url": {"url": image}})
+        messages = {
+            "messages": single_messages,
+            "question": question,
+        }
+
+        other_info = {}
+        for k, v in row_dict.items():
+            if k not in ['question']:
+                other_info[k] = v
+
+        messages.update(other_info)
+
+        return messages, question
+
+
+    
+    def __getitem__(self, item):
+        row_dict = self.data[item]
+        
+        
+        messages, question = self._build_messages(row_dict)
+        row_dict["messages"] = messages
+        row_dict["data_source"] = self.sources[item]
+        row_dict["question"] = question
+        # May be for compatibility with the original dataset
+        # And we don't actually need this
+        # inputs = self.tokenizer(question, return_tensors='pt')
+        # row_dict["input_ids"] = inputs.input_ids
+        # row_dict["attention_mask"] = inputs.attention_mask
+        row_dict["input_ids"] = torch.tensor([0])
+        row_dict["attention_mask"] = torch.tensor([1])
+        row_dict["position_ids"] = torch.tensor([0])
+        
+        return row_dict

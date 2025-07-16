@@ -114,6 +114,35 @@ def entropy_from_logits(logits: torch.Tensor):
     entropy = torch.logsumexp(logits, dim=-1) - torch.sum(pd * logits, dim=-1)
     return entropy
 
+def masked_entropy_from_logits(logits: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+    """
+    Compute entropy only at unmasked positions and return a tensor with the same shape as the full entropy.
+    Masked positions will be set to 0.
+    
+    Args:
+        logits: Tensor of shape (batch_size, sequence_length, vocab_size).
+        mask:   Tensor of shape (batch_size, sequence_length) with 1 for positions to include, 0 to ignore.
+    
+    Returns:
+        A tensor of shape (batch_size, sequence_length) where entropy is computed at unmasked positions and 0 elsewhere.
+    """
+    # Select only the unmasked positions to avoid extra computation.
+    logits_unmasked = logits[mask.bool()]  # Shape: [num_unmasked, vocab_size]
+    
+    # Compute the probability distribution over vocab tokens.
+    pd = torch.nn.functional.softmax(logits_unmasked, dim=-1)
+    
+    # Compute the entropy only for unmasked logits.
+    entropy_unmasked = torch.logsumexp(logits_unmasked, dim=-1) - torch.sum(pd * logits_unmasked, dim=-1)
+    
+    # Create a tensor of zeros with the full shape.
+    full_entropy = torch.zeros(mask.shape, dtype=entropy_unmasked.dtype, device=entropy_unmasked.device)
+    
+    # Scatter the computed entropy back into the full tensor.
+    full_entropy[mask.bool()] = entropy_unmasked
+    
+    return full_entropy
+
 
 def masked_sum(values, mask, axis=None):
     """Compute mean of tensor with a masked values."""

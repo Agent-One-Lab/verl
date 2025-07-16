@@ -250,7 +250,12 @@ class vLLMRollout(BaseRollout):
                 "temperature": self.config.val_kwargs.temperature,
                 "n": 1,  # if validate, already repeat in ray_trainer
             }
+        # We overwrite default settings for agent rollout
 
+        kwargs.update({
+            "n": prompts.meta_info.get('n', 1)
+        })
+        batch_size = batch * prompts.meta_info.get('n', 1)
         # users can customize different sampling_params at different run
         with self.update_sampling_params(**kwargs):
             outputs = self.inference_engine.generate(
@@ -292,20 +297,20 @@ class vLLMRollout(BaseRollout):
         # prompt: left pad + response: right pad
         # attention_mask: [0,0,0,0,1,1,1,1, | 1,1,1,0,0,0,0,0]
         # position_ids:   [0,0,0,0,0,1,2,3, | 4,5,6,7,8,9,10,11]
-        response_position_ids = position_ids[..., -1:] + delta_position_id
-        position_ids = torch.cat([position_ids, response_position_ids], dim=-1)
-        response_attention_mask = get_response_mask(response_id=response, eos_token=eos_token_id, dtype=attention_mask.dtype)
-        attention_mask = torch.cat((attention_mask, response_attention_mask), dim=-1)
+        # response_position_ids = position_ids[..., -1:] + delta_position_id
+        # position_ids = torch.cat([position_ids, response_position_ids], dim=-1)
+        # response_attention_mask = get_response_mask(response_id=response, eos_token=eos_token_id, dtype=attention_mask.dtype)
+        # attention_mask = torch.cat((attention_mask, response_attention_mask), dim=-1)
 
         # all the tp ranks should contain the same data here. data in all ranks are valid
         batch = TensorDict(
             {
-                "prompts": idx,
+                # "prompts": idx,
                 "responses": response,
-                "input_ids": seq,  # here input_ids become the whole sentences
+                # "input_ids": seq,  # here input_ids become the whole sentences
                 # 'old_log_probs': log_probs, # we will recompute old log prob with actor
-                "attention_mask": attention_mask,
-                "position_ids": position_ids,
+                # "attention_mask": attention_mask,
+                # "position_ids": position_ids,
             },
             batch_size=batch_size,
         )

@@ -263,7 +263,10 @@ def compute_reinforce_plus_plus_outcome_advantage(token_level_rewards: torch.Ten
         Returns: `(torch.Tensor)`
             shape: (bs, response_length)
     """
-
+    # Maybe we need turn-based implementation
+    # Currently, same as the original implementation
+    # print(f"token_level_rewards: {token_level_rewards.shape}")
+    # print(f"response_mask: {response_mask.shape}")
     with torch.no_grad():
         returns = torch.zeros_like(token_level_rewards)
         running_return = 0
@@ -271,12 +274,14 @@ def compute_reinforce_plus_plus_outcome_advantage(token_level_rewards: torch.Ten
         for t in reversed(range(token_level_rewards.shape[1])):
             running_return = token_level_rewards[:, t] + gamma * running_return
             returns[:, t] = running_return
-            # Reset after EOS
-            running_return = running_return * response_mask[:, t]
+            # We don't reset after EOS, we use action_mask to mask the return and advantages
+            # running_return = running_return * response_mask[:, t]
 
         advantages = verl_F.masked_whiten(returns, response_mask)
         advantages = advantages * response_mask
 
+    # print(f"advantages after just compute: {advantages.shape}")
+    # print(f"returns after just compute: {returns.shape}")
     return advantages, returns
 
 
@@ -402,6 +407,8 @@ def compute_policy_loss(
     ratio = torch.exp(negative_approx_kl)
     ppo_kl = verl_F.masked_mean(-negative_approx_kl, response_mask)
 
+    print(f"advantages: {advantages.shape}")
+    print(f"ratio: {ratio.shape}")
     pg_losses1 = -advantages * ratio
     if cliprange_low is None:
         cliprange_low = cliprange

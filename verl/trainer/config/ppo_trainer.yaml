@@ -1,11 +1,27 @@
+agent:
+  use_agent: True
+  agent_type: "code"
+  model_name_or_path: null
+  template: qwen2.5
+  tools: 
+    - google_search
+    - answer
+  task_info: null # For react agent, you can specify the task info here
+  reward_name: "qa_f1_reward"
+  backend: "async_verl"
+  max_steps: 4
+  num_chains: 5
+  log_file: null
+  project_name: ${trainer.project_name}
+
 data:
   tokenizer: null
   train_files: ~/data/rlhf/gsm8k/train.parquet
   val_files: ~/data/rlhf/gsm8k/test.parquet
   prompt_key: prompt
   reward_fn_key: data_source
-  max_prompt_length: 512
-  max_response_length: 512
+  max_prompt_length: 8192
+  max_response_length: 8192
   train_batch_size: 1024
   val_batch_size: null
   return_raw_input_ids: False  # This should be set to true when the tokenizer between policy and rm differs
@@ -87,8 +103,9 @@ actor_rollout_ref:
     ulysses_sequence_parallel_size: ${actor_rollout_ref.actor.ulysses_sequence_parallel_size} # sp size
   rollout:
     name: vllm
-    mode: sync # sync: LLM, async: AsyncLLM
-    chat_scheduler: null # async chat scheduler, e.g examples.ppo_trainer.naive_chat_scheduler.NaiveChatCompletionScheduler
+    mode: async # sync: LLM, async: AsyncLLM
+    chat_scheduler: examples.ppo_trainer.naive_chat_scheduler.NaiveChatCompletionScheduler # async chat scheduler, e.g examples.ppo_trainer.naive_chat_scheduler.NaiveChatCompletionScheduler
+    chat_template: Null # Jinja template for vllm rollout, will be set by agent
     temperature: 1.0
     top_k: -1 # 0 for hf rollout, -1 for vllm rollout
     top_p: 1

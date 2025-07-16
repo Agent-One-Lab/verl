@@ -117,9 +117,13 @@ ENV/
 
 # data
 *.parquet
+data/
 
 
 # local logs
 logs
 log
 outputs
+
+# cache files
+stdout
