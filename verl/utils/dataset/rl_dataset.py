@@ -25,6 +25,8 @@ from collections import defaultdict
 from typing import List, Optional, Union
 
 import datasets
+from huggingface_hub import hf_hub_download
+import shutil
 import numpy as np
 import torch
 from omegaconf import DictConfig, ListConfig
@@ -304,9 +306,23 @@ class RLHFAgentDataset(Dataset):
         #     self.data.extend(json.load(open(data_file)))
         #     file_name = os.path.basename(data_file)
         #     self.sources.extend([file_name] * len(json.load(open(data_file))))
+        self._download_data()
         self._read_data()
 
-        
+    def _download_data(self):
+        for data_file in self.data_files:
+            if not os.path.exists(data_file):
+                # Try to find the data file in HF repo
+                filename = os.path.basename(data_file)
+                cached_path = hf_hub_download(
+                    repo_id="Agent-One/AgentFly-Train",
+                    filename=filename,
+                    repo_type="dataset",
+                )
+                folder = os.path.dirname(data_file)
+                os.makedirs(folder, exist_ok=True)
+                shutil.copy(cached_path, data_file)
+                print(f"Downloaded {filename} to {data_file}")
 
     def _read_data(self):
         # self._convert_parquet_to_json(self.data_files)

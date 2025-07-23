@@ -19,12 +19,12 @@ implement PPO
 """
 
 from collections import defaultdict
-
 import numpy as np
 import torch
-
 import verl.utils.torch_functional as verl_F
+import logging
 
+logger = logging.getLogger(__name__)
 
 class AdaptiveKLController:
     """
@@ -407,8 +407,8 @@ def compute_policy_loss(
     ratio = torch.exp(negative_approx_kl)
     ppo_kl = verl_F.masked_mean(-negative_approx_kl, response_mask)
 
-    print(f"advantages: {advantages.shape}")
-    print(f"ratio: {ratio.shape}")
+    logger.debug(f"[compute_policy_loss] advantages: {advantages.shape}")
+    logger.debug(f"[compute_policy_loss] ratio: {ratio.shape}")
     pg_losses1 = -advantages * ratio
     if cliprange_low is None:
         cliprange_low = cliprange

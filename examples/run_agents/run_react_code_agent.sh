@@ -37,16 +37,17 @@ num_chains=8
 kl_coef=0.001
 train_dataset="orz_math_57k_train"
 # adv_estimator=rloo
-adv_estimator=reinforce_plus_plus
+# adv_estimator=reinforce_plus_plus
 # adv_estimator=remax
-# adv_estimator=grpo
+adv_estimator=grpo
 # adv_estimator=gae
 
 mini_batch_size=$batch_size
 
 agent_type=react
 tools="[code_interpreter,answer]"
-reward_name="math_reward_tool"
+# reward_name="math_reward_tool"
+reward_name="math_reward_thought_with_tool"
 # reward_name="llm_as_judge_math_reward"
 entropy_coeff=0.001
 kl_loss_type=mse

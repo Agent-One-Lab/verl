@@ -18,6 +18,7 @@ FSDP PPO Trainer with Ray-based single controller.
 This trainer supports model-agonistic model initialization with huggingface
 """
 import asyncio
+import logging
 import sys
 import threading
 sys.path.append("../agents")
@@ -658,9 +659,9 @@ class RayPPOTrainer:
             assert len(lst) == 0 or len(lst) == len(sample_scores), f"{key_info}: {len(lst)=}, {len(sample_scores)=}"
 
         data_sources = np.concatenate(data_source_lst, axis=0)
-        print(f"Reward extra infos: {reward_extra_infos_dict.keys()}")
-        for key in reward_extra_infos_dict.keys():
-            print(f"{key}: {len(reward_extra_infos_dict[key])}")
+        # print(f"[validate] Reward extra infos: {reward_extra_infos_dict.keys()}")
+        # for key in reward_extra_infos_dict.keys():
+        #     print(f"[validate] {key}: {len(reward_extra_infos_dict[key])}")
 
         data_src2var2metric2val = process_validation_metrics(data_sources, sample_inputs, reward_extra_infos_dict)
         metric_dict = {}
@@ -1022,7 +1023,6 @@ class RayPPOTrainer:
                             reward_tensor, reward_extra_infos_dict = ray.get(future_reward)
                         batch.batch["token_level_scores"] = reward_tensor
 
-                        print(f"{list(reward_extra_infos_dict.keys())=}")
                         if reward_extra_infos_dict:
                             batch.non_tensor_batch.update({k: np.array(v) for k, v in reward_extra_infos_dict.items()})
 

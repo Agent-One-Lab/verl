@@ -195,7 +195,7 @@ class AsyncvLLMServer(AsyncServerBase):
         model_config = self.engine.model_config
         BASE_MODEL_PATHS = [BaseModelPath(name=model_name, model_path=model_path)]
         models = OpenAIServingModels(self.engine, model_config, BASE_MODEL_PATHS)
-        print(f"self.config.rollout.chat_template: {self.config.rollout.chat_template}")
+        logger.debug(f"self.config.rollout.chat_template: {self.config.rollout.chat_template}")
         self.openai_serving_chat = OpenAIServingChat(
             self.engine,
             model_config,
