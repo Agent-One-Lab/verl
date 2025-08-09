@@ -67,11 +67,16 @@ def convert_parquet_to_json(parquet_file: str, json_file: str):
         json.dump(records, f, ensure_ascii=False, indent=2)
 
 
-def pil_to_data_uri(img: Image.Image, fmt="PNG") -> str:
-    buf = io.BytesIO()
-    img.save(buf, format=fmt)
-    b64 = base64.b64encode(buf.getvalue()).decode()
-    return f"data:image/{fmt.lower()};base64,{b64}"
+def pil_to_data_uri(img: Union[Image.Image, str], fmt="PNG") -> str:
+    if isinstance(img, Image.Image):
+        buf = io.BytesIO()
+        img.save(buf, format=fmt)
+        b64 = base64.b64encode(buf.getvalue()).decode()
+        return f"data:image/{fmt.lower()};base64,{b64}"
+    elif isinstance(img, str):
+        return img
+    else:
+        raise ValueError(f"Invalid image type: {type(img)}")
 
 
 class RLHFDataset(Dataset):
@@ -376,7 +381,8 @@ class RLHFAgentDataset(Dataset):
         
         if "image" in row_dict:
             from verl.utils.dataset.vision_utils import process_image
-            image = process_image(row_dict["image"])
+            # image = process_image(row_dict["image"])
+            image = row_dict["image"]
             image = pil_to_data_uri(image)
             # convert PIL Image to base64
             # buffer = io.BytesIO()

@@ -616,7 +616,7 @@ class RayPPOTrainer:
             else:
                 self.async_rollout_manager.wake_up()
                 # test_output_gen_batch_padded = self.async_rollout_manager.generate_sequences(test_gen_batch_padded)
-                self.agent_wrapper.set_llm_engine(self.async_rollout_manager, self.tokenizer)
+                self.agent_wrapper.set_llm_engine(self.async_rollout_manager, self.tokenizer, self.processor)
                 self.run_on_bg(self.agent_wrapper.run_async(max_steps=self.config.agent.max_steps, start_messages=test_gen_batch.non_tensor_batch['messages'], num_chains=1))
                 test_output_gen_batch = self.agent_wrapper.get_verl_data_proto()
                 self.async_rollout_manager.sleep()
@@ -944,7 +944,7 @@ class RayPPOTrainer:
                             self.async_rollout_manager.wake_up()
                             # gen_batch_output = self.async_rollout_manager.generate_sequences(gen_batch)
 
-                            self.agent_wrapper.set_llm_engine(self.async_rollout_manager, self.tokenizer)
+                            self.agent_wrapper.set_llm_engine(self.async_rollout_manager, self.tokenizer, self.processor)
                             # Async agent rollout
                             self.run_on_bg(self.agent_wrapper.run_async(max_steps=self.config.agent.max_steps, start_messages=gen_batch.non_tensor_batch["messages"], num_chains=self.config.agent.num_chains))
                             gen_batch_output = self.agent_wrapper.get_verl_data_proto()
