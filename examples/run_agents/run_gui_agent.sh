@@ -5,7 +5,7 @@
 export VLLM_USE_V1=1
 # export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True  # Not compatible with vLLM
 # Set logging level for agents module to DEBUG
-export VERL_LOGGING_LEVEL=DEBUG
+# export VERL_LOGGING_LEVEL=DEBUG
 
 set -x
 
@@ -27,6 +27,7 @@ ray start --head --node-ip-address="$head_node_ip" --port=$port  --num-cpus 192 
 
 
 # Model configuration for GUI agent
+<<<<<<< HEAD
 model=ByteDance-Seed/UI-TARS-1.5-7B
 # model=Qwen/Qwen2.5-VL-3B-Instruct
 lr=5e-7
@@ -39,6 +40,20 @@ kl_coef=0.001
 # GUI-specific dataset paths (update these to your actual dataset paths)
 train_dataset="data/rlhf/gui/gui_r1_train.parquet"
 eval_dataset="data/rlhf/gui/gui_r1_test.parquet"
+=======
+# model=ByteDance-Seed/UI-TARS-1.5-7B
+model=Qwen/Qwen2.5-VL-3B-Instruct
+lr=5e-7
+length=256
+val_batch_size=8
+train_batch_size=8
+num_chains=1
+kl_coef=0.001
+
+# GUI-specific dataset paths (update these to your actual dataset paths)
+train_dataset="GUI-R1/train_100_samples.parquet"
+eval_dataset="GUI-R1/test_100_samples.parquet"
+>>>>>>> 6b302a6f97c418ab0eb6c749ae1d435beb4e86aa
 
 # GUI-specific tools
 tools="[pyautogui_code_generator]"
@@ -61,11 +76,20 @@ prompt_template="qwen2.5-vl"
 agent_backend="async_verl"
 total_training_steps=200
 project_name="AgentRL"
+<<<<<<< HEAD
 
 python3 -m verl.trainer.main_ppo \
     algorithm.adv_estimator=$adv_estimator \
     data.train_files=${train_dataset} \
     data.val_files=${eval_dataset} \
+=======
+chat_scheduler="examples.ppo_trainer.naive_chat_scheduler.NaiveChatCompletionScheduler"
+
+python3 -m verl.trainer.main_ppo \
+    algorithm.adv_estimator=$adv_estimator \
+    data.train_files=/mnt/weka/home/yongxin.wang/workspace/Data/${train_dataset} \
+    data.val_files=/mnt/weka/home/yongxin.wang/workspace/Data/${eval_dataset} \
+>>>>>>> 6b302a6f97c418ab0eb6c749ae1d435beb4e86aa
     agent.num_chains=$num_chains \
     data.val_batch_size=$val_batch_size \
     data.train_batch_size=$train_batch_size \
@@ -90,6 +114,10 @@ python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.actor.fsdp_config.optimizer_offload=True \
     actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=4 \
     actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
+<<<<<<< HEAD
+=======
+    actor_rollout_ref.rollout.chat_scheduler=$chat_scheduler \
+>>>>>>> 6b302a6f97c418ab0eb6c749ae1d435beb4e86aa
     actor_rollout_ref.rollout.name=vllm \
     actor_rollout_ref.rollout.n=4 \
     actor_rollout_ref.rollout.response_length=$length \
@@ -110,4 +138,16 @@ python3 -m verl.trainer.main_ppo \
     trainer.test_freq=10 \
     trainer.total_training_steps=$total_training_steps \
     trainer.val_before_train=False \
+<<<<<<< HEAD
     $@
+=======
+    $@
+
+# Notes:
+# 1. Update train_dataset and eval_dataset paths to your actual GUI dataset locations
+# 2. The model ByteDance-Seed/UI-TARS-1.5-7B is a vision-language model optimized for UI tasks
+# 3. Adjust batch sizes and GPU settings based on your hardware configuration
+# 4. The gui_reward function should be properly registered in the reward system
+# 5. Make sure the UI agent type is properly registered in the agent factory
+# 6. Set WANDB_API_KEY if you want to use Weights & Biases for logging
+>>>>>>> 6b302a6f97c418ab0eb6c749ae1d435beb4e86aa
