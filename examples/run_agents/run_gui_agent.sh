@@ -27,10 +27,10 @@ ray start --head --node-ip-address="$head_node_ip" --port=$port  --num-cpus 192 
 
 
 # Model configuration for GUI agent
-model=ByteDance-Seed/UI-TARS-1.5-7B
-# model=Qwen/Qwen2.5-VL-7B-Instruct
-lr=5e-7
-length=256
+# model=ByteDance-Seed/UI-TARS-1.5-7B
+model=Qwen/Qwen2.5-VL-7B-Instruct
+lr=4e-7
+length=512
 val_batch_size=512
 train_batch_size=64
 num_chains=8
