@@ -302,7 +302,7 @@ class RayWorkerGroup(WorkerGroup):
                     if register_center_actor is None:
                         raise TimeoutError(
                             f"Failed to get register_center_actor {actor_name} "
-                            f"in {list_named_actors(all_namespaces=True)} "
+                            f"in {list_actors(all_namespaces=True)} "
                             f"for {self._ray_wait_register_center_timeout} seconds. "
                             "Ensure that any lingering Ray resources from previous "
                             "runs are cleaned up (e.g., by restarting the Ray cluster), "

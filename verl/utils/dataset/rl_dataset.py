@@ -36,7 +36,7 @@ import pandas as pd
 import verl.utils.torch_functional as verl_F
 from verl.utils.model import compute_position_id_with_mask
 from PIL import Image
-
+import math
 logger = logging.getLogger(__name__)
 
 
@@ -67,7 +67,65 @@ def convert_parquet_to_json(parquet_file: str, json_file: str):
         json.dump(records, f, ensure_ascii=False, indent=2)
 
 
-def pil_to_data_uri(img: Union[Image.Image, str, dict], fmt=None) -> str:
+def any_to_pil(img: Union[Image.Image, str, dict, bytes]) -> Image.Image:
+    """
+    Convert various image formats to PIL Image.
+    
+    Args:
+        img: Image in one of the following formats:
+            - PIL Image: returned as-is
+            - str: file path to image or base64 string
+            - dict: dictionary containing image data (e.g., {"bytes": bytes_data})
+            - bytes: raw image bytes
+    
+    Returns:
+        PIL Image object
+    """
+    if isinstance(img, Image.Image):
+        return img
+    elif isinstance(img, dict):
+        if "bytes" in img:
+            img = img["bytes"]
+        else:
+            raise ValueError("Dictionary must contain 'bytes' key")
+    
+    if isinstance(img, str):
+        # Check if it's a base64 string
+        if img.startswith('data:image/'):
+            # Handle data URI format
+            import base64
+            header, encoded = img.split(',', 1)
+            img_bytes = base64.b64decode(encoded)
+            return Image.open(io.BytesIO(img_bytes))
+        elif len(img) > 100 and all(c in 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=' for c in img):
+            # Likely a base64 string (check for base64 characters and reasonable length)
+            try:
+                import base64
+                img_bytes = base64.b64decode(img)
+                return Image.open(io.BytesIO(img_bytes))
+            except Exception:
+                # If base64 decoding fails, treat as file path
+                pass
+        # Treat as file path
+        return Image.open(img)
+    elif isinstance(img, bytes):
+        return Image.open(io.BytesIO(img))
+    else:
+        raise ValueError(f"Unsupported image type: {type(img)}")
+
+def auto_resize_image(img: Image.Image, max_pixels: int = 1536 * 1536, prevent_upscale: bool = True) -> Image.Image:
+    w, h = img.size
+    area = w * h
+    if area <= max_pixels and prevent_upscale:
+        return img  # already within budget
+    scale = math.sqrt(max_pixels / area) if area > 0 else 1.0
+    new_w = max(1, int(round(w * scale)))
+    new_h = max(1, int(round(h * scale)))
+    # Use high-quality downsampling
+    return img.resize((new_w, new_h), Image.LANCZOS)
+
+
+def image_to_data_uri(img: Union[Image.Image, str, dict], fmt=None) -> str:
     if isinstance(img, dict):
         if "bytes" in img:
             img = img["bytes"]
@@ -400,6 +458,15 @@ class RLHFAgentDataset(Dataset):
 
     def __len__(self):
         return len(self.data)
+
+    def _process_image(self, image):
+        """
+        Process image. First limits the maximum pixels and scale it. Then convert to data URI (base64)
+        """
+        image = any_to_pil(image)
+        image = auto_resize_image(image)
+        image = image_to_data_uri(image)
+        return image
     
     def _build_messages(self, row_dict):
         question_keys = ['question', 'problem', 'instruction']
@@ -415,7 +482,7 @@ class RLHFAgentDataset(Dataset):
             from verl.utils.dataset.vision_utils import process_image
             # image = process_image(row_dict["image"])
             image = row_dict["image"]
-            image = pil_to_data_uri(image)
+            image = self._process_image(image)
             # convert PIL Image to base64
             # buffer = io.BytesIO()
             # image.save(buffer, format="PNG")

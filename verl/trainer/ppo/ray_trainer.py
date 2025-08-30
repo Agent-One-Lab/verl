@@ -17,11 +17,11 @@
 FSDP PPO Trainer with Ray-based single controller.
 This trainer supports model-agonistic model initialization with huggingface
 """
+import sys
+sys.path.append("..")
 import asyncio
 import logging
-import sys
 import threading
-sys.path.append("../agents")
 import json
 import os
 import uuid
@@ -33,8 +33,8 @@ from enum import Enum
 from pprint import pprint
 from typing import Dict, Optional, Type
 import ray
-from agents.agents.auto import AutoAgent
-from agents.envs import clear_enroot_containers
+from agentfly.agents.auto import AutoAgent
+from agentfly.envs import clear_enroot_containers
 import numpy as np
 import ray
 import torch
@@ -617,7 +617,7 @@ class RayPPOTrainer:
                 self.async_rollout_manager.wake_up()
                 # test_output_gen_batch_padded = self.async_rollout_manager.generate_sequences(test_gen_batch_padded)
                 self.agent_wrapper.set_llm_engine(self.async_rollout_manager, self.tokenizer, self.processor)
-                self.run_on_bg(self.agent_wrapper.run_async(max_steps=self.config.agent.max_steps, start_messages=test_gen_batch.non_tensor_batch['messages'], num_chains=1))
+                self.run_on_bg(self.agent_wrapper.run(max_turns=self.config.agent.max_turns, messages=test_gen_batch.non_tensor_batch['messages'], num_chains=1))
                 test_output_gen_batch = self.agent_wrapper.get_verl_data_proto()
                 self.async_rollout_manager.sleep()
 
@@ -946,7 +946,7 @@ class RayPPOTrainer:
 
                             self.agent_wrapper.set_llm_engine(self.async_rollout_manager, self.tokenizer, self.processor)
                             # Async agent rollout
-                            self.run_on_bg(self.agent_wrapper.run_async(max_steps=self.config.agent.max_steps, start_messages=gen_batch.non_tensor_batch["messages"], num_chains=self.config.agent.num_chains))
+                            self.run_on_bg(self.agent_wrapper.run(max_turns=self.config.agent.max_turns, messages=gen_batch.non_tensor_batch["messages"], num_chains=self.config.agent.num_chains))
                             gen_batch_output = self.agent_wrapper.get_verl_data_proto()
                             self.async_rollout_manager.sleep()
 
@@ -957,7 +957,7 @@ class RayPPOTrainer:
                             # gen_baseline_output = self.actor_rollout_wg.generate_sequences(gen_baseline_batch)
                             self.async_rollout_manager.wake_up()
                             self.agent_wrapper.set_llm_engine(self.async_rollout_manager, self.tokenizer)
-                            self.run_on_bg(self.agent_wrapper.run_async(max_steps=self.config.agent.max_steps, start_messages=gen_batch.non_tensor_batch["messages"], num_chains=1))
+                            self.run_on_bg(self.agent_wrapper.run(max_turns=self.config.agent.max_turns, start_messages=gen_batch.non_tensor_batch["messages"], num_chains=1))
                             gen_baseline_output = self.agent_wrapper.get_verl_data_proto()
                             self.async_rollout_manager.sleep()
 

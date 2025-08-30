@@ -6,7 +6,6 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:8
 #SBATCH --cpus-per-task=96
-#SBATCH --exclusive
 #SBATCH --output=stdout/%x_%j.out
 #SBATCH --error=stdout/%x_%j.err
 
@@ -29,7 +28,7 @@ export TRITON_HOME=/tmp/triton_cache
 export VLLM_USE_V1=1
 export HYDRA_FULL_ERROR=1
 # Conda path
-CONDA_BIN_PATH="Conda Bin Path"
+CONDA_BIN_PATH="Conda bin path"
 
 
 # =================== Ray start ===================
@@ -60,7 +59,7 @@ sleep 10
 model=Qwen/Qwen2.5-7B-Instruct
 template=qwen2.5-no-system-tool
 lr=4e-7
-length=512
+length=384
 batch_size=128
 num_chains=1
 kl_coef=0.005
@@ -75,14 +74,17 @@ adv_estimator=reinforce_plus_plus
 agent_type=react
 tools="[scienceworld_explorer]"
 reward_name="scienceworld_reward"
-# reward_name="llm_as_judge_math_reward"
+
 entropy_coeff=0.005
 kl_loss_type=mse
-max_steps=20
+max_turns=18
 agent_backend="async_verl"
-project_name="ScienceWorld"
 total_training_steps=200
 
+# project_name="ScienceWorld"
+project_name="Open"
+experiment_name="scienceworld_agent"
+# experiment_name="${model}-${train_dataset}-${lr}-${length}-bs${batch_size}-n${num_chains}-kl${kl_loss_type}${kl_coef}-entropy${entropy_coeff}-${max_steps}steps-${adv_estimator}"
 
 python3 -m verl.trainer.main_ppo \
     algorithm.adv_estimator=$adv_estimator \
@@ -124,10 +126,10 @@ python3 -m verl.trainer.main_ppo \
     trainer.critic_warmup=0 \
     trainer.logger=['console','wandb'] \
     trainer.project_name=$project_name \
-    trainer.experiment_name="${model}-${train_dataset}-${lr}-${length}-bs${batch_size}-n${num_chains}-kl${kl_loss_type}${kl_coef}-entropy${entropy_coeff}-${max_steps}steps-${adv_estimator}" \
+    trainer.experiment_name=$experiment_name \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=${worker_num} \
-    trainer.save_freq=10 \
+    trainer.save_freq=50 \
     trainer.test_freq=200 \
     trainer.total_training_steps=$total_training_steps \
     trainer.val_before_train=False

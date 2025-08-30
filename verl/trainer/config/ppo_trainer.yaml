@@ -9,7 +9,7 @@ agent:
   task_info: null # For react agent, you can specify the task info here
   reward_name: "qa_f1_reward"
   backend: "async_verl"
-  max_steps: 4
+  max_turns: 4
   num_chains: 5
   log_file: null
   project_name: ${trainer.project_name}

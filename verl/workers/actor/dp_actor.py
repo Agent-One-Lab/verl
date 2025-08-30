@@ -71,7 +71,10 @@ class DataParallelPPOActor(BasePPOActor):
         multi_modal_inputs = {}
         if "multi_modal_inputs" in micro_batch:
             for key in micro_batch["multi_modal_inputs"][0].keys():
-                multi_modal_inputs[key] = torch.cat([inputs[key] for inputs in micro_batch["multi_modal_inputs"]], dim=0)
+                multi_modal_inputs[key] = torch.cat([inputs[key] for inputs in micro_batch["multi_modal_inputs"] if inputs[key] is not None], dim=0)
+            logger.debug(f"multi_modal_inputs: {multi_modal_inputs.keys()}")
+            for key in multi_modal_inputs.keys():
+                logger.debug(f"multi_modal_inputs[{key}].shape: {multi_modal_inputs[key].shape}")
 
         with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
             input_ids = micro_batch["input_ids"]

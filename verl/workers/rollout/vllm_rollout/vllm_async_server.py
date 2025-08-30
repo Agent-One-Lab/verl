@@ -52,9 +52,9 @@ class ExternalRayDistributedExecutor(Executor):
         # Make sure subprocess in same namespace as parent actor.
         # actor name format: {name_prefix}WorkerDict_{pg_idx}:{local_rank}
         ray.init(namespace=namespace)
-        print(f"ray.util.list_named_actors(): {ray.util.list_named_actors()}")
+        logger.debug(f"ray.util.list_named_actors(): {ray.util.list_named_actors()}")
         actor_names = [actor_name for actor_name in ray.util.list_named_actors() if actor_name.startswith(f"{wg_prefix}WorkerDict")]
-        print(f"actor_names: {actor_names}")
+        logger.debug(f"actor_names: {actor_names}")
 
         vllm_tp_size = self.vllm_config.parallel_config.tensor_parallel_size
         assert len(actor_names) == vllm_dp_size * vllm_tp_size, f"instance_id: {self.vllm_config.instance_id} has {len(actor_names)} actors, but vllm_dp_size: {vllm_dp_size} * vllm_tp_size: {vllm_tp_size} = {vllm_dp_size * vllm_tp_size} is expected."
@@ -205,8 +205,7 @@ class AsyncvLLMServer(AsyncServerBase):
             chat_template=self.config.rollout.chat_template,
             chat_template_content_format="auto",
             enable_auto_tools=True,
-            tool_parser="hermes",
-            expand_tools_even_if_tool_choice_none=True,
+            tool_parser="hermes"
         )
         self.serving_completion = OpenAIServingCompletion(
             self.engine,
