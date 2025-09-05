@@ -251,7 +251,7 @@ def convert_fsdp_checkpoints_to_hfmodels():
         test_fsdp_state_dict(auto_model, args.test_hf_dir, state_dict)
 
     with torch.device("meta"):
-        model = auto_model.from_config(config, torch_dtype=torch.bfloat16)
+        model = auto_model.from_config(config)
     model.to_empty(device="cpu")
     model = patch_model_generation_config(model, args.hf_model_path)
 
