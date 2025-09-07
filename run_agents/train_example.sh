@@ -19,7 +19,7 @@ rm -rf /tmp/ray/ray_current_cluster
 # Start Ray head node
 ray start --head --node-ip-address="$head_node_ip" --port=$port  --num-cpus 192 --num-gpus 1
 
-model=Qwen/Qwen2.5-3B-Instruct
+model=Qwen/Qwen2.5-1.5B-Instruct
 template=qwen2.5
 lr=5e-7
 length=256
@@ -45,7 +45,7 @@ kl_loss_type=mse
 max_turns=3
 agent_backend="async_verl"
 project_name="AgentRL"
-total_training_steps=200
+total_training_steps=100
 
 experiment_name="test_gsm8k"
 # experiment_name="${model}-${agent_type}-${train_dataset}-${lr}-${length}-bs${batch_size}-n${num_chains}-kl${kl_loss_type}${kl_coef}-entropy${entropy_coeff}-${max_steps}steps-${adv_estimator}"
