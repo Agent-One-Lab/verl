@@ -11,6 +11,7 @@ agent:
   backend: "async_verl"
   max_turns: 4
   num_chains: 5
+  max_length: null
   log_file: null
   project_name: ${trainer.project_name}
 
