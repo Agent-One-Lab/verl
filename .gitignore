@@ -127,3 +127,6 @@ outputs
 
 # cache files
 stdout
+
+# training scripts
+training_scripts/
