@@ -13,7 +13,10 @@ agent:
   num_chains: 5
   max_length: null
   log_file: null
-  project_name: ${trainer.project_name}
+  monitors:
+    - wandb
+  wandb_project_name: ${trainer.project_name}
+  wandb_run_name: ${trainer.experiment_name}
 
 data:
   tokenizer: null
