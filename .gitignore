@@ -21,7 +21,7 @@ tensorflow/my_graph/*
 
 # Distribution / packaging
 .Python
-env/
+# env/
 build/
 develop-eggs/
 dist/
@@ -58,6 +58,8 @@ nosetests.xml
 coverage.xml
 *,cover
 .hypothesis/
+pytest.ini
+output.txt
 
 # Translations
 *.mo
@@ -112,6 +114,9 @@ ENV/
 # vim
 *.swp
 
+# emacs
+*~
+
 # ckpt
 *.lock
 
@@ -130,3 +135,4 @@ stdout
 
 # training scripts
 training_scripts/
+.history

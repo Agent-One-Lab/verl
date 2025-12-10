@@ -1,5 +1,6 @@
 export VLLM_USE_V1=1
 # Run in single node
+export VERL_LOGGING_LEVEL=INFO
 
 set -x
 
@@ -30,8 +31,8 @@ train_dataset="orz_math_57k_train"
 # adv_estimator=rloo
 # adv_estimator=reinforce_plus_plus
 # adv_estimator=remax
-adv_estimator=grpo
-# adv_estimator=gae
+# adv_estimator=grpo
+adv_estimator=gae
 
 mini_batch_size=$batch_size
 

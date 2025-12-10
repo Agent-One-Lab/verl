@@ -1,5 +1,6 @@
 export VLLM_USE_V1=1
 # Run in single node
+export VERL_LOGGING_LEVEL=DEBUG
 
 set -x
 
@@ -19,12 +20,19 @@ rm -rf /tmp/ray/ray_current_cluster
 # Start Ray head node
 ray start --head --node-ip-address="$head_node_ip" --port=$port  --num-cpus 192 --num-gpus 1
 
-model=Qwen/Qwen2.5-1.5B-Instruct
+model=Qwen/Qwen2.5-3B-Instruct
 template=qwen2.5
 lr=5e-7
 length=256
-batch_size=32
+mini_batch_size=64
 num_chains=8
+num_gpus=1
+
+# Fully on-policy training
+ppo_mini_batch_size=${mini_batch_size}*${num_chains}
+
+ppo_micro_batch_size_per_gpu=8
+
 kl_coef=0.001
 train_dataset="./data/rlhf/math/gsm8k_train.json"
 val_dataset="./data/rlhf/math/gsm8k_test.json"
@@ -33,8 +41,6 @@ val_dataset="./data/rlhf/math/gsm8k_test.json"
 # adv_estimator=remax
 adv_estimator=grpo
 # adv_estimator=gae
-
-mini_batch_size=$batch_size
 
 agent_type=hf
 tools="[calculator]"
@@ -54,7 +60,7 @@ python3 -m verl.trainer.main_ppo \
     algorithm.adv_estimator=$adv_estimator \
     data.train_files=$train_dataset \
     data.val_files=$val_dataset \
-    data.train_batch_size=$batch_size \
+    data.train_batch_size=${mini_batch_size} \
     agent.agent_type=$agent_type \
     agent.tools=$tools \
     agent.template=$template \
@@ -68,7 +74,7 @@ python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.model.use_remove_padding=False \
     actor_rollout_ref.model.path=${model} \
     actor_rollout_ref.actor.ppo_mini_batch_size=${mini_batch_size} \
-    actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=2 \
+    actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=${ppo_micro_batch_size_per_gpu} \
     actor_rollout_ref.actor.use_kl_loss=True \
     actor_rollout_ref.actor.kl_loss_coef=$kl_coef \
     actor_rollout_ref.actor.kl_loss_type=$kl_loss_type \
@@ -96,4 +102,4 @@ python3 -m verl.trainer.main_ppo \
     trainer.save_freq=50 \
     trainer.test_freq=10 \
     trainer.total_training_steps=$total_training_steps \
-    trainer.val_before_train=False
+    trainer.val_before_train=True

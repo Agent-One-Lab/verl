@@ -5,9 +5,9 @@ verl is a flexible, efficient and production-ready RL training framework designe
 
 verl is flexible and easy to use with:
 
-- **Easy extension of diverse RL algorithms**: The Hybrid programming model combines the strengths of single-controller and multi-controller paradigms to enable flexible representation and efficient execution of complex Post-Training dataflows. Allowing users to build RL dataflows in a few lines of code.
+- **Easy extension of diverse RL algorithms**: The hybrid programming model combines the strengths of single-controller and multi-controller paradigms to enable flexible representation and efficient execution of complex Post-Training dataflows. Allowing users to build RL dataflows in a few lines of code.
 
-- **Seamless integration of existing LLM infra with modular APIs**: Decouples computation and data dependencies, enabling seamless integration with existing LLM frameworks, such as PyTorch FSDP, Megatron-LM and vLLM. Moreover, users can easily extend to other LLM training and inference frameworks.
+- **Seamless integration of existing LLM infra with modular APIs**: Decouples computation and data dependencies, enabling seamless integration with existing LLM frameworks, such as PyTorch FSDP, Megatron-LM, vLLM and SGLang. Moreover, users can easily extend to other LLM training and inference frameworks.
 
 - **Flexible device mapping and parallelism**: Supports various placement of models onto different sets of GPUs for efficient resource utilization and scalability across different cluster sizes.
 
@@ -25,49 +25,70 @@ verl is fast with:
 .. _Contents:
 
 .. toctree::
-   :maxdepth: 5
+   :maxdepth: 2
    :caption: Quickstart
 
    start/install
    start/quickstart
    start/multinode
    start/ray_debug_tutorial
+   start/more_resources
+   start/agentic_rl
 
 .. toctree::
-   :maxdepth: 4
+   :maxdepth: 2
    :caption: Programming guide
 
    hybrid_flow
+   single_controller
 
 .. toctree::
-   :maxdepth: 5
+   :maxdepth: 1
    :caption: Data Preparation
 
    preparation/prepare_data
    preparation/reward_function
 
 .. toctree::
-   :maxdepth: 5
+   :maxdepth: 2
    :caption: Configurations
 
    examples/config
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
    :caption: PPO Example
 
    examples/ppo_code_architecture
    examples/gsm8k_example
    examples/multi_modal_example
+   examples/skypilot_examples
 
 .. toctree::
    :maxdepth: 1
    :caption: Algorithms
 
+<<<<<<< HEAD
    experiment/ppo
 
 
 .. toctree:: 
+=======
+   algo/ppo.md
+   algo/grpo.md
+   algo/collabllm.md
+   algo/dapo.md
+   algo/spin.md
+   algo/sppo.md
+   algo/entropy.md
+   algo/opo.md
+   algo/baseline.md
+   algo/gpg.md
+   algo/rollout_corr.md
+   algo/rollout_corr_math.md
+
+.. toctree::
+>>>>>>> main
    :maxdepth: 1
    :caption: PPO Trainer and Workers
 
@@ -75,39 +96,100 @@ verl is fast with:
    workers/fsdp_workers
    workers/megatron_workers
    workers/sglang_worker
+   workers/model_engine
 
 .. toctree::
    :maxdepth: 1
    :caption: Performance Tuning Guide
-   
+
+   perf/dpsk.md
+   perf/best_practices
    perf/perf_tuning
    README_vllm0.8.md
    perf/device_tuning
+   perf/verl_profiler_system.md
+   perf/nsight_profiling.md
 
 .. toctree::
    :maxdepth: 1
+<<<<<<< HEAD
    :caption: Advance Usage and Extension
 
    advance/placement
    advance/dpo_extension
+=======
+   :caption: Adding new models
+
+>>>>>>> main
    advance/fsdp_extension
    advance/megatron_extension
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Advanced Features
+
    advance/checkpoint
+<<<<<<< HEAD
    sglang_multiturn/multiturn.rst
+=======
+   advance/rope
+   advance/attention_implementation
+   advance/ppo_lora.rst
+   sglang_multiturn/multiturn.rst
+   sglang_multiturn/interaction_system.rst
+   advance/placement
+   advance/dpo_extension
+   examples/sandbox_fusion_example
+   advance/rollout_trace.rst
+   advance/rollout_skip.rst
+   advance/one_step_off
+   advance/agent_loop
+   advance/reward_loop
+   advance/fully_async
+   data/transfer_queue.md
+   advance/grafana_prometheus.md
+   advance/fp8.md
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Hardware Support
+
+   amd_tutorial/amd_build_dockerfile_page.rst
+   amd_tutorial/amd_vllm_page.rst
+   ascend_tutorial/ascend_quick_start.rst
+   ascend_tutorial/ascend_consistency.rst
+   ascend_tutorial/ascend_profiling_zh.rst
+   ascend_tutorial/ascend_profiling_en.rst
+   ascend_tutorial/dockerfile_build_guidance.rst
+   ascend_tutorial/ascend_sglang_quick_start.rst
+>>>>>>> main
 
 .. toctree::
    :maxdepth: 1
    :caption: API References
 
+<<<<<<< HEAD
    data
    api/utils
+=======
+   api/data
+   api/single_controller.rst
+   api/trainer.rst
+   api/utils.rst
+>>>>>>> main
 
 
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 2
    :caption: FAQ
 
    faq/faq
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Development Notes
+
+   sglang_multiturn/sandbox_fusion.rst
 
 Contribution
 -------------
