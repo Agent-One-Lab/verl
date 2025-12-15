@@ -287,11 +287,11 @@ class RayPPOTrainer:
         self.processor = processor
         self.config = config
 
-        # Agent rollout related initialization
+        # Agent rollout related initializationa
         # Before starting the training, clear all enroot containers
         clear_enroot_containers()
         print(f"Config.Agent: {config.agent}")
-        self.agent_wrapper = AutoAgent.from_config(config.agent)
+        self.agent_wrapper = AutoAgent.from_config(config.agent.init_args)
         # set jinja template for vllm rollout
         self.config.actor_rollout_ref.rollout.chat_template = self.agent_wrapper.jinja_template
         self.tokenizer.chat_template = self.agent_wrapper.jinja_template

@@ -61,7 +61,7 @@ python3 -m verl.trainer.main_ppo \
     data.train_files=$train_dataset \
     data.val_files=$val_dataset \
     data.train_batch_size=${mini_batch_size} \
-    agent.agent_type=$agent_type \
+    agent.init_args.agent_type=$agent_type \
     agent.tools=$tools \
     agent.template=$template \
     agent.model_name_or_path=$model \

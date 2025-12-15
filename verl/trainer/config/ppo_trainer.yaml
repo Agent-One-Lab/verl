@@ -1,22 +1,17 @@
 agent:
   use_agent: True
-  agent_type: "code"
-  model_name_or_path: null
-  template: qwen2.5
-  tools: 
-    - google_search
-    - answer
-  task_info: null # For react agent, you can specify the task info here
-  reward_name: "qa_f1_reward"
-  backend: "async_verl"
+  init_args:
+    model_name_or_path: null
+    template: qwen2.5
+    tools:
+      - google_search
+      - answer
+    max_length: null
+    reward_name: "qa_f1_reward"
+    backend: "async_verl"
+    agent_type: "code"
   max_turns: 4
   num_chains: 5
-  max_length: null
-  log_file: null
-  monitors:
-    - wandb
-  wandb_project_name: ${trainer.project_name}
-  wandb_run_name: ${trainer.experiment_name}
 
 # Format checks enforced on CI:
 # 1. Comments must appear above each field.
