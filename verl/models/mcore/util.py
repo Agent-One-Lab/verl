@@ -19,7 +19,7 @@ import torch
 from megatron.core import parallel_state as mpu
 from megatron.core.packed_seq_params import PackedSeqParams
 
-from verl.utils.model import CausalLMOutputForPPO
+from ....verl.utils.model import CausalLMOutputForPPO
 
 
 def preprocess_packed_seqs(

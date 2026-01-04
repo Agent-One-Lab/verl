@@ -24,16 +24,16 @@ from torch.distributed.device_mesh import DeviceMesh
 from torch.distributed.fsdp.api import FullStateDictConfig, ShardedStateDictConfig, StateDictType
 from torch.distributed.fsdp.fully_sharded_data_parallel import FullyShardedDataParallel as FSDP
 
-from verl import DataProto
-from verl.protocol import all_gather_data_proto
-from verl.utils.device import get_device_id, get_torch_device, set_expandable_segments
-from verl.utils.fsdp_utils import fsdp_version, load_fsdp_model_to_gpu, offload_fsdp_model_to_cpu
-from verl.utils.import_utils import deprecated
-from verl.utils.memory_utils import aggressive_empty_cache
-from verl.utils.model import convert_weight_keys
-from verl.utils.profiler import GPUMemoryLogger, log_gpu_memory_usage, simple_timer
-from verl.utils.torch_functional import check_device_is_available
-from verl.workers.rollout.sglang_rollout.utils import get_named_tensor_buckets
+from ....verl import DataProto
+from ....verl.protocol import all_gather_data_proto
+from ....verl.utils.device import get_device_id, get_torch_device, set_expandable_segments
+from ....verl.utils.fsdp_utils import fsdp_version, load_fsdp_model_to_gpu, offload_fsdp_model_to_cpu
+from ....verl.utils.import_utils import deprecated
+from ....verl.utils.memory_utils import aggressive_empty_cache
+from ....verl.utils.model import convert_weight_keys
+from ....verl.utils.profiler import GPUMemoryLogger, log_gpu_memory_usage, simple_timer
+from ....verl.utils.torch_functional import check_device_is_available
+from ....verl.workers.rollout.sglang_rollout.utils import get_named_tensor_buckets
 
 from .base import BaseShardingManager
 

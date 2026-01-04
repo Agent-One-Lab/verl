@@ -17,7 +17,7 @@ import logging
 import os
 import re
 
-from verl.tools.mcp_base_tool import MCPBaseTool
+from ....verl.tools.mcp_base_tool import MCPBaseTool
 
 from .schemas import OpenAIFunctionToolSchema
 

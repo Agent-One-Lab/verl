@@ -22,8 +22,8 @@ import torch
 from pydantic import BaseModel, ConfigDict, model_validator
 from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast, ProcessorMixin
 
-from verl.tools.schemas import OpenAIFunctionToolCall, OpenAIFunctionToolSchema, ToolResponse
-from verl.utils.model import compute_position_id_with_mask
+from ....verl.tools.schemas import OpenAIFunctionToolCall, OpenAIFunctionToolSchema, ToolResponse
+from ....verl.utils.model import compute_position_id_with_mask
 
 logger = logging.getLogger(__file__)
 logger.setLevel(os.getenv("VERL_LOGGING_LEVEL", "WARN"))
@@ -270,7 +270,7 @@ class AsyncRolloutRequest(BaseModel):
             and "Qwen2VLImageProcessor" in processing_class.image_processor.__class__.__name__
         )
         if is_qwen2vl:
-            from verl.models.transformers.qwen2_vl import get_rope_index
+            from ....verl.models.transformers.qwen2_vl import get_rope_index
 
             image_grid_thw = video_grid_thw = second_per_grid_ts = None
             if multi_modal_inputs:

@@ -275,7 +275,7 @@ def forward_with_torch_backend(
     temperature: float = 1.0,
     **kwargs,
 ) -> "Qwen3VLCausalLMOutputForPPO":
-    from verl.utils.experimental.torch_functional import FusedLinearForPPO
+    from ....verl.utils.experimental.torch_functional import FusedLinearForPPO
 
     outputs = self.model(input_ids, **kwargs)
     hidden_states = outputs[0]
@@ -309,7 +309,7 @@ def forward_with_triton_backend(
     temperature: float = 1.0,
     **kwargs,
 ) -> "Qwen3VLCausalLMOutputForPPO":
-    from verl.utils.kernel.linear_cross_entropy import linear_cross_entropy
+    from ....verl.utils.kernel.linear_cross_entropy import linear_cross_entropy
 
     outputs = self.model(input_ids, **kwargs)
     hidden_states = outputs[0]

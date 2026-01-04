@@ -20,8 +20,8 @@ from uuid import uuid4
 
 from fastmcp.exceptions import ClientError
 
-from verl.tools.utils.mcp_clients.McpClientManager import ClientManager
-from verl.utils.rollout_trace import rollout_trace_op
+from ....verl.tools.utils.mcp_clients.McpClientManager import ClientManager
+from ....verl.utils.rollout_trace import rollout_trace_op
 
 from .base_tool import BaseTool
 from .schemas import OpenAIFunctionToolSchema, ToolResponse

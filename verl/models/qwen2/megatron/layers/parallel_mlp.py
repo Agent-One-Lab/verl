@@ -23,8 +23,8 @@ from megatron.core import parallel_state as mpu
 from torch import nn
 from transformers.activations import ACT2FN
 
-from verl.models.qwen2.megatron.layers.parallel_linear import MergedColumnParallelLinear
-from verl.utils.megatron import tensor_parallel as tp_utils
+from ......verl.models.qwen2.megatron.layers.parallel_linear import MergedColumnParallelLinear
+from ......verl.utils.megatron import tensor_parallel as tp_utils
 
 
 class ParallelQwen2MLP(nn.Module):

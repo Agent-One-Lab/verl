@@ -19,9 +19,9 @@ from itertools import chain
 import torch
 from torch import distributed as dist
 
-from verl.protocol import DataProto
-from verl.utils import tensordict_utils as tu
-from verl.utils.device import get_device_name
+from ...verl.protocol import DataProto
+from ...verl.utils import tensordict_utils as tu
+from ...verl.utils.device import get_device_name
 
 
 def calculate_workload(seqlen_list: list[int]):

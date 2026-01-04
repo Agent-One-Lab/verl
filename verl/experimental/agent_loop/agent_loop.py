@@ -30,21 +30,21 @@ from pydantic import BaseModel, ConfigDict
 from tensordict import TensorDict
 from transformers import AutoProcessor, AutoTokenizer
 
-from verl.experimental.agent_loop.prometheus_utils import update_prometheus_config
-from verl.experimental.agent_loop.utils import resolve_config_path
-from verl.experimental.reward import RewardManagerWorker
-from verl.protocol import DataProto
-from verl.single_controller.ray.base import RayResourcePool, RayWorkerGroup
-from verl.utils import hf_processor, hf_tokenizer
-from verl.utils.fs import copy_to_local
-from verl.utils.model import compute_position_id_with_mask
-from verl.utils.rollout_trace import (
+from ....verl.experimental.agent_loop.prometheus_utils import update_prometheus_config
+from ....verl.experimental.agent_loop.utils import resolve_config_path
+from ....verl.experimental.reward import RewardManagerWorker
+from ....verl.protocol import DataProto
+from ....verl.single_controller.ray.base import RayResourcePool, RayWorkerGroup
+from ....verl.utils import hf_processor, hf_tokenizer
+from ....verl.utils.fs import copy_to_local
+from ....verl.utils.model import compute_position_id_with_mask
+from ....verl.utils.rollout_trace import (
     RolloutTraceConfig,
     rollout_trace_attr,
     rollout_trace_op,
 )
-from verl.utils.transferqueue_utils import tqbridge
-from verl.workers.rollout.replica import TokenOutput, get_rollout_replica_class
+from ....verl.utils.transferqueue_utils import tqbridge
+from ....verl.workers.rollout.replica import TokenOutput, get_rollout_replica_class
 
 logger = logging.getLogger(__file__)
 logger.setLevel(os.getenv("VERL_LOGGING_LEVEL", "WARN"))
@@ -503,7 +503,7 @@ class AgentLoopWorkerBase:
             # because np.array() only keeps the keys for BatchFeature.
             multi_modal_inputs = dict(multi_modal_inputs.convert_to_tensors("pt"))
         if self.processor is not None and "Qwen2VLImageProcessor" in self.processor.image_processor.__class__.__name__:
-            from verl.models.transformers.qwen2_vl import get_rope_index
+            from ....verl.models.transformers.qwen2_vl import get_rope_index
 
             image_grid_thw = multi_modal_inputs.get("image_grid_thw")
             video_grid_thw = multi_modal_inputs.get("video_grid_thw")
@@ -641,8 +641,8 @@ class AgentLoopWorkerBase:
         self,
     ):
         """Create a client for data system (TransferQueue)."""
-        from verl.single_controller.ray.base import get_random_string
-        from verl.utils.transferqueue_utils import create_transferqueue_client
+        from ....verl.single_controller.ray.base import get_random_string
+        from ....verl.utils.transferqueue_utils import create_transferqueue_client
 
         client_name = get_random_string(length=6)
 
@@ -708,7 +708,7 @@ class AgentLoopManager:
         self.reward_model_manager = None
         self.reward_router_address = None
         if self.config.reward_model.enable and self.config.reward_model.enable_resource_pool:
-            from verl.experimental.reward import RewardModelManager
+            from ....verl.experimental.reward import RewardModelManager
 
             # TODO (dyy): current rm is colocated with the legacy fsdp/megatron rm
             # future pr will depericate fsdp/megatron rm and init RewardModelManager in standalone mode

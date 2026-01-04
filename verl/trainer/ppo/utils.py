@@ -17,8 +17,8 @@ from enum import Enum
 
 from omegaconf import DictConfig
 
-from verl.single_controller.base import Worker
-from verl.trainer.ppo.core_algos import AdvantageEstimator
+from ....verl.single_controller.base import Worker
+from ....verl.trainer.ppo.core_algos import AdvantageEstimator
 
 WorkerType = type[Worker]
 

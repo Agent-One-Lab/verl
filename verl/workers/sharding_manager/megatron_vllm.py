@@ -25,18 +25,18 @@ from megatron.core import parallel_state as mpu
 from omegaconf import DictConfig
 from torch import nn
 
-from verl import DataProto
-from verl.models.mcore.weight_converter import McoreToHFWeightConverterBase
-from verl.protocol import all_gather_data_proto
-from verl.third_party.vllm import LLM, VLLM_SLEEP_LEVEL
-from verl.third_party.vllm import parallel_state as vllm_ps
-from verl.utils.device import get_torch_device, set_expandable_segments
-from verl.utils.import_utils import deprecated
-from verl.utils.megatron_utils import load_megatron_model_to_gpu, offload_megatron_model_to_cpu, per_tensor_generator
-from verl.utils.memory_utils import aggressive_empty_cache
-from verl.utils.profiler import GPUMemoryLogger, log_gpu_memory_usage
-from verl.utils.profiler.performance import simple_timer
-from verl.utils.torch_functional import check_device_is_available
+from ....verl import DataProto
+from ....verl.models.mcore.weight_converter import McoreToHFWeightConverterBase
+from ....verl.protocol import all_gather_data_proto
+from ....verl.third_party.vllm import LLM, VLLM_SLEEP_LEVEL
+from ....verl.third_party.vllm import parallel_state as vllm_ps
+from ....verl.utils.device import get_torch_device, set_expandable_segments
+from ....verl.utils.import_utils import deprecated
+from ....verl.utils.megatron_utils import load_megatron_model_to_gpu, offload_megatron_model_to_cpu, per_tensor_generator
+from ....verl.utils.memory_utils import aggressive_empty_cache
+from ....verl.utils.profiler import GPUMemoryLogger, log_gpu_memory_usage
+from ....verl.utils.profiler.performance import simple_timer
+from ....verl.utils.torch_functional import check_device_is_available
 
 from .base import BaseShardingManager
 
@@ -169,7 +169,7 @@ class MegatronVLLMShardingManager(BaseShardingManager):
                     self.layer_name_mapping,
                 )
             model = self.model_runner.model
-            from verl.utils.vllm.patch import patch_vllm_moe_model_weight_loader
+            from ....verl.utils.vllm.patch import patch_vllm_moe_model_weight_loader
 
             patch_vllm_moe_model_weight_loader(model)
             loaded_params = model.load_weights(per_tensor_param)

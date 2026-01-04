@@ -20,7 +20,7 @@ from vllm.lora.request import LoRARequest
 from vllm.lora.utils import get_adapter_absolute_path
 from vllm.lora.worker_manager import LRUCacheWorkerLoRAManager
 
-from verl.third_party.vllm import get_version
+from ....verl.third_party.vllm import get_version
 
 
 class TensorLoRARequest(LoRARequest):

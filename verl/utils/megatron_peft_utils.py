@@ -59,7 +59,7 @@ def get_adapter_state_dict(model):
     Returns:
         Dict of adapter parameter names to tensors
     """
-    from verl.utils.megatron_utils import unwrap_model
+    from ...verl.utils.megatron_utils import unwrap_model
 
     # Unwrap model from DDP/Float16Module
     unwrapped = unwrap_model(model)
@@ -139,7 +139,7 @@ def load_adapter_checkpoint(
     """
     from megatron.core import mpu
 
-    from verl.utils.megatron_utils import unwrap_model
+    from ...verl.utils.megatron_utils import unwrap_model
 
     # Get rank-specific path
     rank_path = _get_rank_checkpoint_path(checkpoint_path)
@@ -192,7 +192,7 @@ def count_adapter_parameters(model):
     Returns:
         Tuple of (adapter_params, total_params, percentage)
     """
-    from verl.utils.megatron_utils import unwrap_model
+    from ...verl.utils.megatron_utils import unwrap_model
 
     unwrapped = unwrap_model(model)
     if isinstance(unwrapped, list):

@@ -22,7 +22,7 @@ from pathlib import Path
 
 import torch
 
-from verl.utils.device import get_torch_device, is_cuda_available
+from ...verl.utils.device import get_torch_device, is_cuda_available
 
 logger = logging.getLogger(__file__)
 logger.setLevel(os.getenv("VERL_LOGGING_LEVEL", "WARN"))

@@ -13,7 +13,7 @@
 # limitations under the License.
 from pathlib import Path
 
-from verl.protocol import DataProto
+from ...verl.protocol import DataProto
 
 
 class RolloutSkip:

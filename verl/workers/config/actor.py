@@ -17,9 +17,9 @@ from typing import Any, Optional
 
 from omegaconf import MISSING
 
-from verl.base_config import BaseConfig
-from verl.trainer.config import CheckpointConfig
-from verl.utils.profiler.config import ProfilerConfig
+from ....verl.base_config import BaseConfig
+from ....verl.trainer.config import CheckpointConfig
+from ....verl.utils.profiler.config import ProfilerConfig
 
 from .engine import FSDPEngineConfig, McoreEngineConfig
 from .model import HFModelConfig

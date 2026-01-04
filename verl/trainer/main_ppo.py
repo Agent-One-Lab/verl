@@ -14,23 +14,26 @@
 """
 Note that we don't combine the main with ray_trainer as ray_trainer is used by other mpain.
 """
-import sys
 import os
 import socket
 import warnings
-
+import sys
+# _project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', '..'))
+# _verl_path = os.path.join(_project_root, 'agentfly', 'verl')
+# if _verl_path not in sys.path:
+#     sys.path.insert(0, _verl_path)
 import hydra
 import ray
 from omegaconf import OmegaConf
 
-from verl.experimental.dataset.sampler import AbstractSampler
-from verl.trainer.constants_ppo import get_ppo_ray_runtime_env
-from verl.trainer.ppo.ray_trainer import RayPPOTrainer
-from verl.trainer.ppo.reward import load_reward_manager
-from verl.trainer.ppo.utils import need_critic, need_reference_policy
-from verl.utils.config import validate_config
-from verl.utils.device import is_cuda_available
-from verl.utils.import_utils import load_extern_type
+from ...verl.experimental.dataset.sampler import AbstractSampler
+from ...verl.trainer.constants_ppo import get_ppo_ray_runtime_env
+from ...verl.trainer.ppo.ray_trainer import RayPPOTrainer
+from ...verl.trainer.ppo.reward import load_reward_manager
+from ...verl.trainer.ppo.utils import need_critic, need_reference_policy
+from ...verl.utils.config import validate_config
+from ...verl.utils.device import is_cuda_available
+from ...verl.utils.import_utils import load_extern_type
 
 
 @hydra.main(config_path="config", config_name="ppo_trainer", version_base=None)
@@ -85,7 +88,7 @@ def run_ppo(config, task_runner_class=None) -> None:
         and config.global_profiler.get("steps") is not None
         and len(config.global_profiler.get("steps", [])) > 0
     ):
-        from verl.utils.import_utils import is_nvtx_available
+        from ...verl.utils.import_utils import is_nvtx_available
 
         assert is_nvtx_available(), "nvtx is not available in CUDA platform. Please 'pip3 install nvtx'"
         nsight_options = OmegaConf.to_container(
@@ -120,14 +123,14 @@ class TaskRunner:
 
     def add_actor_rollout_worker(self, config):
         """Add actor rollout worker based on the actor strategy."""
-        from verl.single_controller.ray import RayWorkerGroup
-        from verl.trainer.ppo.ray_trainer import Role
+        from ...verl.single_controller.ray import RayWorkerGroup
+        from ...verl.trainer.ppo.ray_trainer import Role
 
         use_legacy_worker_impl = config.trainer.get("use_legacy_worker_impl", "auto")
 
         # use new model engine implementation
         if use_legacy_worker_impl == "disable":
-            from verl.workers.engine_workers import ActorRolloutRefWorker
+            from ...verl.workers.engine_workers import ActorRolloutRefWorker
 
             actor_rollout_cls = ActorRolloutRefWorker
             ray_worker_group_cls = RayWorkerGroup
@@ -145,7 +148,7 @@ class TaskRunner:
             warnings.warn("spmd rollout mode is deprecated and will be removed in v0.6.2", stacklevel=2)
 
         if config.actor_rollout_ref.actor.strategy in {"fsdp", "fsdp2"}:
-            from verl.workers.fsdp_workers import ActorRolloutRefWorker, AsyncActorRolloutRefWorker
+            from ...verl.workers.fsdp_workers import ActorRolloutRefWorker, AsyncActorRolloutRefWorker
 
             actor_rollout_cls = (
                 AsyncActorRolloutRefWorker
@@ -155,7 +158,7 @@ class TaskRunner:
             ray_worker_group_cls = RayWorkerGroup
 
         elif config.actor_rollout_ref.actor.strategy == "megatron":
-            from verl.workers.megatron_workers import ActorRolloutRefWorker, AsyncActorRolloutRefWorker
+            from ...verl.workers.megatron_workers import ActorRolloutRefWorker, AsyncActorRolloutRefWorker
 
             actor_rollout_cls = (
                 AsyncActorRolloutRefWorker
@@ -176,21 +179,21 @@ class TaskRunner:
         if config.critic.strategy in {"fsdp", "fsdp2"}:
             use_legacy_worker_impl = config.trainer.get("use_legacy_worker_impl", "auto")
             if use_legacy_worker_impl in ["auto", "enable"]:
-                from verl.workers.fsdp_workers import CriticWorker
+                from ...verl.workers.fsdp_workers import CriticWorker
             elif use_legacy_worker_impl == "disable":
-                from verl.workers.roles import CriticWorker
+                from ...verl.workers.roles import CriticWorker
 
                 print("Using new worker implementation")
             else:
                 raise ValueError(f"Invalid use_legacy_worker_impl: {use_legacy_worker_impl}")
 
         elif config.critic.strategy == "megatron":
-            from verl.workers.megatron_workers import CriticWorker
+            from ...verl.workers.megatron_workers import CriticWorker
 
         else:
             raise NotImplementedError
 
-        from verl.trainer.ppo.ray_trainer import Role
+        from ...verl.trainer.ppo.ray_trainer import Role
 
         self.role_worker_mapping[Role.Critic] = ray.remote(CriticWorker)
         self.mapping[Role.Critic] = "global_pool"
@@ -212,26 +215,26 @@ class TaskRunner:
             reward_pool = [config.reward_model.n_gpus_per_node] * config.reward_model.nnodes
             resource_pool_spec["reward_pool"] = reward_pool
 
-        from verl.trainer.ppo.ray_trainer import ResourcePoolManager
+        from ...verl.trainer.ppo.ray_trainer import ResourcePoolManager
 
         resource_pool_manager = ResourcePoolManager(resource_pool_spec=resource_pool_spec, mapping=self.mapping)
         return resource_pool_manager
 
     def add_reward_model_worker(self, config):
         """Add reward model worker if enabled."""
-        from verl.trainer.ppo.ray_trainer import Role
+        from ...verl.trainer.ppo.ray_trainer import Role
 
         if config.reward_model.enable:
             use_legacy_worker_impl = config.trainer.get("use_legacy_worker_impl", "auto")
             if use_legacy_worker_impl in ["auto", "enable"]:
                 if config.reward_model.strategy in {"fsdp", "fsdp2"}:
-                    from verl.workers.fsdp_workers import RewardModelWorker
+                    from ...verl.workers.fsdp_workers import RewardModelWorker
                 elif config.reward_model.strategy == "megatron":
-                    from verl.workers.megatron_workers import RewardModelWorker
+                    from ...verl.workers.megatron_workers import RewardModelWorker
                 else:
                     raise NotImplementedError
             elif use_legacy_worker_impl == "disable":
-                from verl.workers.roles import RewardModelWorker
+                from ...verl.workers.roles import RewardModelWorker
 
                 print("Using new worker implementation")
             else:
@@ -245,7 +248,7 @@ class TaskRunner:
 
     def add_ref_policy_worker(self, config, ref_policy_cls):
         """Add reference policy worker if KL loss or KL reward is used."""
-        from verl.trainer.ppo.ray_trainer import Role
+        from ...verl.trainer.ppo.ray_trainer import Role
 
         # Ref policy has been fused into ActorRolloutRefWorker in new model engine,
         # we don't need to add a separate ref policy worker goup.
@@ -272,7 +275,7 @@ class TaskRunner:
 
         from omegaconf import OmegaConf
 
-        from verl.utils.fs import copy_to_local
+        from ...verl.utils.fs import copy_to_local
 
         print(f"TaskRunner hostname: {socket.gethostname()}, PID: {os.getpid()}")
         pprint(OmegaConf.to_container(config, resolve=True))
@@ -306,7 +309,7 @@ class TaskRunner:
         )
 
         # Instantiate the tokenizer and processor.
-        from verl.utils import hf_processor, hf_tokenizer
+        from ...verl.utils import hf_processor, hf_tokenizer
 
         trust_remote_code = config.data.get("trust_remote_code", False)
         tokenizer = hf_tokenizer(local_path, trust_remote_code=trust_remote_code)
@@ -323,7 +326,7 @@ class TaskRunner:
 
         resource_pool_manager = self.init_resource_pool_mgr(config)
 
-        from verl.utils.dataset.rl_dataset import collate_fn
+        from ...verl.utils.dataset.rl_dataset import collate_fn
 
         # Create training and validation datasets.
         train_dataset = create_rl_dataset(
@@ -380,7 +383,7 @@ def create_rl_dataset(data_paths, data_config, tokenizer, processor, is_train=Tr
     """
     from torch.utils.data import Dataset
 
-    from verl.utils.dataset.rl_dataset import RLHFAgentDataset
+    from ...verl.utils.dataset.rl_dataset import RLHFAgentDataset
 
     # Check if a custom dataset class is specified in the data configuration
     # and if the path to the custom class is provided
@@ -395,7 +398,7 @@ def create_rl_dataset(data_paths, data_config, tokenizer, processor, is_train=Tr
             )
     elif "datagen" in data_config and data_config.datagen.get("path", None) is not None and is_train:
         # If a data generation strategy is specified, use the DynamicGenDataset class
-        from verl.utils.dataset.dynamicgen_dataset import DynamicGenDataset
+        from ...verl.utils.dataset.dynamicgen_dataset import DynamicGenDataset
 
         dataset_cls = DynamicGenDataset
         print("Using DynamicGenDataset for data generation.")

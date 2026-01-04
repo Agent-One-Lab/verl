@@ -17,7 +17,7 @@ from collections.abc import Sized
 from omegaconf import DictConfig
 from torch.utils.data import Sampler
 
-from verl import DataProto
+from ....verl import DataProto
 
 
 class AbstractSampler(Sampler[int]):

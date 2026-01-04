@@ -358,7 +358,7 @@ class DistProfilerExtension:
     def __init__(self, profiler: DistProfiler):
         self.profiler = profiler
 
-    from verl.single_controller.base.decorator import Dispatch, register
+    from ....verl.single_controller.base.decorator import Dispatch, register
 
     @register(dispatch_mode=Dispatch.ONE_TO_ALL)
     def start_profile(self, **kwargs) -> None:

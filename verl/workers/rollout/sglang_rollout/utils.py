@@ -20,7 +20,7 @@ import numpy as np
 import torch
 import torch.distributed as dist
 
-from verl.utils.device import get_device_name
+from .....verl.utils.device import get_device_name
 
 
 def broadcast_pyobj(

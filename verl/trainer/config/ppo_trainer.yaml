@@ -81,7 +81,7 @@ custom_reward_function:
 algorithm:
 
   # Required when using verl.utils.omega_conf_to_dataclass to instantiate dataclass configs
-  _target_: verl.trainer.config.AlgoConfig
+  _target_: agentfly.verl.trainer.config.AlgoConfig
 
   # Discount factor for future rewards
   gamma: 1.0
@@ -105,7 +105,7 @@ algorithm:
   kl_ctrl:
 
     # Required when using verl.utils.omega_conf_to_dataclass to instantiate dataclass configs
-    _target_: verl.trainer.config.KLControlConfig
+    _target_: agentfly.verl.trainer.config.KLControlConfig
 
     # KL control type: "fixed" or "adaptive"
     type: fixed
@@ -227,7 +227,7 @@ trainer:
 global_profiler:
 
   # Required when using verl.utils.omega_conf_to_dataclass to instantiate dataclass configs
-  _target_: verl.utils.profiler.ProfilerConfig
+  _target_: agentfly.verl.utils.profiler.ProfilerConfig
 
   # Profiling tool: choose between nsys, npu, torch, torch_memory
   tool: null
@@ -250,7 +250,7 @@ global_profiler:
     nsys:
 
       # Required when using verl.utils.omega_conf_to_dataclass to instantiate dataclass configs
-      _target_: verl.utils.profiler.config.NsightToolConfig
+      _target_: agentfly.verl.utils.profiler.config.NsightToolConfig
 
       # True for each task has its own database, False for all tasks in one training step share one database.
       discrete: False

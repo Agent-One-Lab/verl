@@ -28,9 +28,9 @@ from omegaconf import DictConfig
 from torch.utils.data import Dataset
 from transformers import PreTrainedTokenizer, ProcessorMixin
 
-from verl import DataProto
-from verl.utils.dataset import RLHFDataset
-from verl.utils.import_utils import load_extern_type
+from ....verl import DataProto
+from ....verl.utils.dataset import RLHFDataset
+from ....verl.utils.import_utils import load_extern_type
 
 logger = logging.getLogger(__name__)
 

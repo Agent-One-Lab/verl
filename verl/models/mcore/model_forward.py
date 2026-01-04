@@ -15,7 +15,7 @@
 # limitations under the License.
 
 
-from verl.utils.megatron_utils import unwrap_model
+from ....verl.utils.megatron_utils import unwrap_model
 
 from .util import (
     postprocess_packed_seqs,

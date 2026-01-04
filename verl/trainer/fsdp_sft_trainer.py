@@ -43,16 +43,16 @@ from torchdata.stateful_dataloader import StatefulDataLoader
 from tqdm import tqdm
 from transformers import AutoConfig, AutoModelForCausalLM, PreTrainedModel
 
-import verl.utils.hdfs_io as hdfs_io
-from verl.utils.attention_utils import index_first_axis, pad_input, rearrange, unpad_input
-from verl.utils.checkpoint.checkpoint_manager import find_latest_ckpt_path, get_checkpoint_tracker_filename
-from verl.utils.checkpoint.fsdp_checkpoint_manager import FSDPCheckpointManager
-from verl.utils.dataset import SFTDataset
-from verl.utils.dataset.multiturn_sft_dataset import MultiTurnSFTDataset
-from verl.utils.device import get_device_id, get_device_name, is_cuda_available, is_npu_available
-from verl.utils.distributed import destroy_global_process_group, initialize_global_process_group
-from verl.utils.fs import copy_to_local
-from verl.utils.fsdp_utils import (
+from ...verl.utils import hdfs_io as hdfs_io
+from ...verl.utils.attention_utils import index_first_axis, pad_input, rearrange, unpad_input
+from ...verl.utils.checkpoint.checkpoint_manager import find_latest_ckpt_path, get_checkpoint_tracker_filename
+from ...verl.utils.checkpoint.fsdp_checkpoint_manager import FSDPCheckpointManager
+from ...verl.utils.dataset import SFTDataset
+from ...verl.utils.dataset.multiturn_sft_dataset import MultiTurnSFTDataset
+from ...verl.utils.device import get_device_id, get_device_name, is_cuda_available, is_npu_available
+from ...verl.utils.distributed import destroy_global_process_group, initialize_global_process_group
+from ...verl.utils.fs import copy_to_local
+from ...verl.utils.fsdp_utils import (
     CPUOffloadPolicy,
     MixedPrecisionPolicy,
     apply_fsdp2,
@@ -62,19 +62,19 @@ from verl.utils.fsdp_utils import (
     get_init_weight_context_manager,
     init_fn,
 )
-from verl.utils.logger import log_with_rank
-from verl.utils.profiler import log_gpu_memory_usage
-from verl.utils.py_functional import convert_to_regular_types
-from verl.utils.torch_dtypes import PrecisionType
-from verl.utils.torch_functional import get_cosine_schedule_with_warmup, get_wsd_schedule_with_warmup
-from verl.utils.tracking import Tracking
-from verl.utils.ulysses import (
+from ...verl.utils.logger import log_with_rank
+from ...verl.utils.profiler import log_gpu_memory_usage
+from ...verl.utils.py_functional import convert_to_regular_types
+from ...verl.utils.torch_dtypes import PrecisionType
+from ...verl.utils.torch_functional import get_cosine_schedule_with_warmup, get_wsd_schedule_with_warmup
+from ...verl.utils.tracking import Tracking
+from ...verl.utils.ulysses import (
     gather_outputs_and_unpad,
     get_ulysses_sequence_parallel_world_size,
     ulysses_pad_and_slice_inputs,
 )
-from verl.workers.config.optimizer import build_optimizer
-from verl.workers.sharding_manager.fsdp_ulysses import FSDPUlyssesShardingManager
+from ...verl.workers.config.optimizer import build_optimizer
+from ...verl.workers.sharding_manager.fsdp_ulysses import FSDPUlyssesShardingManager
 
 logger = logging.getLogger(__file__)
 logger.setLevel(os.getenv("VERL_SFT_LOGGING_LEVEL", "WARN"))
@@ -239,7 +239,7 @@ class FSDPSFTTrainer:
             )
 
             if self.use_remove_padding or self.config.ulysses_sequence_parallel_size > 1:
-                from verl.models.transformers.monkey_patch import apply_monkey_patch
+                from ...verl.models.transformers.monkey_patch import apply_monkey_patch
 
                 apply_monkey_patch(model=self.model, ulysses_sp_size=self.config.ulysses_sequence_parallel_size)
 
@@ -536,7 +536,7 @@ class FSDPSFTTrainer:
 
     def save_checkpoint(self, step):
         """Save checkpoint using FSDPCheckpointManager with improved tracking"""
-        from verl.utils.fs import local_mkdir_safe
+        from ...verl.utils.fs import local_mkdir_safe
 
         # Determine checkpoint path
         local_global_step_folder = os.path.join(self.config.trainer.default_local_dir, f"global_step_{step}")
@@ -808,7 +808,7 @@ def run_sft(config):
         mesh_dim_names=("dp", "sp"),
     )
     # build tokenizer and datasets first
-    from verl.utils import hf_tokenizer
+    from ...verl.utils import hf_tokenizer
 
     local_model_path = copy_to_local(src=config.model.partial_pretrain, verbose=True)
     tokenizer = hf_tokenizer(local_model_path, trust_remote_code=config.model.trust_remote_code)
@@ -843,7 +843,7 @@ def create_sft_dataset(data_paths, data_config, tokenizer, max_samples=-1):
     # build dataset
     # First check if a custom dataset class is specified
     if data_config.custom_cls.get("path", None):
-        from verl.utils.import_utils import load_extern_type
+        from ...verl.utils.import_utils import load_extern_type
 
         dataset_cls = load_extern_type(data_config.custom_cls.path, data_config.custom_cls.name)
     # Then check if multi-turn dataset should be used

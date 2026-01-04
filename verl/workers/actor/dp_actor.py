@@ -25,20 +25,20 @@ from torch import nn
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from torch.distributed.tensor import DTensor
 
-import verl.utils.torch_functional as verl_F
-from verl import DataProto
-from verl.trainer.ppo.core_algos import agg_loss, get_policy_loss_fn, kl_penalty
-from verl.utils.attention_utils import index_first_axis, pad_input, rearrange, unpad_input
-from verl.utils.device import get_device_id, get_device_name
-from verl.utils.fsdp_utils import FSDPModule, fsdp2_clip_grad_norm_
-from verl.utils.profiler import GPUMemoryLogger
-from verl.utils.py_functional import append_to_dict
-from verl.utils.seqlen_balancing import prepare_dynamic_batch, restore_dynamic_batch
-from verl.utils.torch_dtypes import PrecisionType
-from verl.utils.torch_functional import logprobs_from_logits
-from verl.utils.ulysses import gather_outputs_and_unpad, ulysses_pad, ulysses_pad_and_slice_inputs
-from verl.workers.actor import BasePPOActor
-from verl.workers.config import ActorConfig
+from ....verl.utils import torch_functional as verl_F
+from ....verl import DataProto
+from ....verl.trainer.ppo.core_algos import agg_loss, get_policy_loss_fn, kl_penalty
+from ....verl.utils.attention_utils import index_first_axis, pad_input, rearrange, unpad_input
+from ....verl.utils.device import get_device_id, get_device_name
+from ....verl.utils.fsdp_utils import FSDPModule, fsdp2_clip_grad_norm_
+from ....verl.utils.profiler import GPUMemoryLogger
+from ....verl.utils.py_functional import append_to_dict
+from ....verl.utils.seqlen_balancing import prepare_dynamic_batch, restore_dynamic_batch
+from ....verl.utils.torch_dtypes import PrecisionType
+from ....verl.utils.torch_functional import logprobs_from_logits
+from ....verl.utils.ulysses import gather_outputs_and_unpad, ulysses_pad, ulysses_pad_and_slice_inputs
+from ....verl.workers.actor import BasePPOActor
+from ....verl.workers.config import ActorConfig
 
 __all__ = ["DataParallelPPOActor"]
 
@@ -102,7 +102,7 @@ class DataParallelPPOActor(BasePPOActor):
         # response_length = micro_batch["responses"].size(-1)
         multi_modal_inputs = {}
         if "multi_modal_inputs" in micro_batch.keys():
-            from verl.utils.model import extract_multi_modal_inputs
+            from ...verl.utils.model import extract_multi_modal_inputs
 
             multi_modal_inputs = extract_multi_modal_inputs(micro_batch["multi_modal_inputs"])
 
@@ -135,7 +135,7 @@ class DataParallelPPOActor(BasePPOActor):
                     ).transpose(0, 1)
 
                 if "image_bound" in multi_modal_inputs:
-                    from verl.utils.dataset.vision_utils import process_multi_modal_inputs_for_minicpmo
+                    from ...verl.utils.dataset.vision_utils import process_multi_modal_inputs_for_minicpmo
 
                     multi_modal_inputs = process_multi_modal_inputs_for_minicpmo(
                         input_ids, attention_mask, position_ids, cu_seqlens, multi_modal_inputs
@@ -485,7 +485,7 @@ class DataParallelPPOActor(BasePPOActor):
                     if loss_mode != "rollout_correction" and rollout_log_prob is not None:
                         # Compute metrics using CURRENT policy π_θ vs π_rollout
                         # Tracks evolving off-policy gap as π_θ updates during mini-batch training
-                        from verl.trainer.ppo.rollout_corr_helper import compute_rollout_corr_metrics_from_logprobs
+                        from ...verl.trainer.ppo.rollout_corr_helper import compute_rollout_corr_metrics_from_logprobs
 
                         rollout_corr_metrics = compute_rollout_corr_metrics_from_logprobs(
                             log_prob=log_prob,

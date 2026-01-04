@@ -19,9 +19,9 @@ from typing import Generator
 import torch
 from torch.distributed.device_mesh import DeviceMesh
 
-from verl import DataProto
-from verl.utils.config import omega_conf_to_dataclass
-from verl.workers.config import HFModelConfig, RolloutConfig
+from ....verl import DataProto
+from ....verl.utils.config import omega_conf_to_dataclass
+from ....verl.workers.config import HFModelConfig, RolloutConfig
 
 __all__ = ["BaseRollout"]
 
@@ -79,10 +79,10 @@ class BaseRollout(ABC):
 
 
 _ROLLOUT_REGISTRY = {
-    ("vllm", "sync"): "verl.workers.rollout.vllm_rollout.vLLMRollout",
-    ("vllm", "async"): "verl.workers.rollout.vllm_rollout.vLLMAsyncRollout",
-    ("sglang", "sync"): "verl.workers.rollout.sglang_rollout.sglang_rollout.SGLangRollout",
-    ("sglang", "async"): "verl.workers.rollout.sglang_rollout.sglang_rollout.ServerAdapter",
+    ("vllm", "sync"): "agentfly.verl.workers.rollout.vllm_rollout.vLLMRollout",
+    ("vllm", "async"): "agentfly.verl.workers.rollout.vllm_rollout.vLLMAsyncRollout",
+    ("sglang", "sync"): "agentfly.verl.workers.rollout.sglang_rollout.sglang_rollout.SGLangRollout",
+    ("sglang", "async"): "agentfly.verl.workers.rollout.sglang_rollout.sglang_rollout.ServerAdapter",
 }
 
 

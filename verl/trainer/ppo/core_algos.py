@@ -28,11 +28,11 @@ import numpy as np
 import torch
 from omegaconf import DictConfig
 
-import verl.utils.torch_functional as verl_F
-from verl.trainer.config import AlgoConfig
-from verl.utils import as_torch_index, group_mean_std
-from verl.utils.import_utils import deprecated
-from verl.workers.config import ActorConfig
+from ....verl.utils import torch_functional as verl_F
+from ....verl.trainer.config import AlgoConfig
+from ....verl.utils import as_torch_index, group_mean_std
+from ....verl.utils.import_utils import deprecated
+from ....verl.workers.config import ActorConfig
 
 PolicyLossFn = Callable[
     [
@@ -1664,7 +1664,7 @@ def compute_policy_loss_with_rollout_correction(
 
     """
     # Import rollout correction helper
-    from verl.trainer.ppo.rollout_corr_helper import compute_rollout_correction_and_rejection_mask
+    from ...verl.trainer.ppo.rollout_corr_helper import compute_rollout_correction_and_rejection_mask
 
     assert config is not None, "ActorConfig must be provided for rollout correction"
 

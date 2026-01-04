@@ -17,7 +17,7 @@ nccl_timeout: 600
 megatron:
 
   # Target configuration dataclass
-  _target_: verl.workers.config.MegatronEngineConfig
+  _target_: agentfly.verl.workers.config.MegatronEngineConfig
 
   # Whether to offload model parameters to CPU
   param_offload: False

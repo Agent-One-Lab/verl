@@ -19,6 +19,7 @@ from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as get_version
 
 from packaging.version import parse as parse_version
+import sys
 
 from .protocol import DataProto
 from .utils.device import is_npu_available

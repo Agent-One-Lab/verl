@@ -20,7 +20,7 @@ defaults:
   - _self_
 
 # Required when using verl.utils.omega_conf_to_dataclass to instantiate dataclass configs
-_target_: verl.workers.config.FSDPCriticConfig
+_target_: agentfly.verl.workers.config.FSDPCriticConfig
 
 # distribution strategy. Options: fsdp (deprecating), fsdp2
 strategy: fsdp
@@ -29,7 +29,7 @@ strategy: fsdp
 model:
 
   # Required when using verl.utils.omega_conf_to_dataclass to instantiate dataclass configs
-  _target_: verl.workers.config.FSDPCriticModelCfg
+  _target_: agentfly.verl.workers.config.FSDPCriticModelCfg
 
   # Whether to use shared memory for loading the model
   use_shm: False

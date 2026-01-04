@@ -22,8 +22,8 @@ from typing import Any, Callable, Dict
 import numpy as np
 import torch
 
-from verl import DataProto
-from verl.utils.import_utils import deprecated
+from ....verl import DataProto
+from ....verl.utils.import_utils import deprecated
 
 
 @deprecated("verl.utils.metric.reduce_metrics")
@@ -42,7 +42,7 @@ def reduce_metrics(metrics: dict[str, list[Any]]) -> dict[str, Any]:
         >>> reduce_metrics(metrics)
         {"loss": 2.0, "accuracy": 0.8}
     """
-    from verl.utils.metric import reduce_metrics
+    from ....verl.utils.metric import reduce_metrics
 
     return reduce_metrics(metrics)
 

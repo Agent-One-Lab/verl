@@ -39,8 +39,8 @@ from transformers import (
 )
 from transformers.modeling_outputs import CausalLMOutputWithPast
 
-from verl.models.registry import ModelRegistry
-from verl.utils.import_utils import is_trl_available
+from ...verl.models.registry import ModelRegistry
+from ...verl.utils.import_utils import is_trl_available
 
 
 class LambdaLayer(nn.Module):
@@ -324,7 +324,7 @@ def normalize_model_name(name, pp_rank, vpp_rank, transformer_config, layer_name
     """
     Transform the model name in each model_chunk in each pp stage into the name in inference engine
     """
-    from verl.utils.megatron_utils import get_transformer_layer_offset
+    from ...verl.utils.megatron_utils import get_transformer_layer_offset
 
     layer_offset = get_transformer_layer_offset(pp_rank, vpp_rank, transformer_config)
 
@@ -401,7 +401,7 @@ def _load_hf_model(config, model_config, is_value_model):
     from accelerate import init_empty_weights
     from megatron.core import parallel_state as mpu
 
-    from verl.models.mcore.saver import _megatron_calc_global_rank
+    from ...verl.models.mcore.saver import _megatron_calc_global_rank
 
     assert hasattr(model_config, "architectures"), "architectures cannot be empty when load weight!"
     architectures = getattr(model_config, "architectures", [])
@@ -410,7 +410,7 @@ def _load_hf_model(config, model_config, is_value_model):
     auto_cls = get_hf_auto_model_class(model_config)
 
     if config.model.path.startswith("hdfs:"):
-        from verl.utils.fs import copy_to_local
+        from ...verl.utils.fs import copy_to_local
 
         print(f"start download from {config.model.path}")
         local_model_path = copy_to_local(src=config.model.path, use_shm=config.model.get("use_shm", False))
@@ -452,7 +452,7 @@ def _load_hf_model(config, model_config, is_value_model):
 
 def get_hf_model_path(config):
     if config.model.path.startswith("hdfs:"):
-        from verl.utils.fs import copy_to_local
+        from ...verl.utils.fs import copy_to_local
 
         local_model_path = copy_to_local(src=config.model.path, use_shm=config.model.get("use_shm", False))
     else:
@@ -464,7 +464,7 @@ def load_megatron_model_weights(config, model_config, parallel_model, params_dty
     """Load weights for verl customized model."""
     architectures, model, state_dict, is_value_model = _load_hf_model(config, model_config, is_value_model)
 
-    from verl.models.weight_loader_registry import get_weight_loader
+    from ...verl.models.weight_loader_registry import get_weight_loader
 
     print(f"before weight loader: architectures = {architectures}...")
     for arch in architectures:
@@ -485,7 +485,7 @@ def load_megatron_gptmodel_weights(config, model_config, parallel_model, params_
     """Load weights for mcore GPT model."""
     _, model, state_dict, is_value_model = _load_hf_model(config, model_config, is_value_model)
 
-    from verl.models.mcore.loader import load_state_dict_to_megatron_gptmodel
+    from ...verl.models.mcore.loader import load_state_dict_to_megatron_gptmodel
 
     load_state_dict_to_megatron_gptmodel(
         state_dict=state_dict,
@@ -535,7 +535,7 @@ def load_mcore_dist_weights(parallel_model, dist_weight_path, is_value_model=Fal
     from megatron.core import dist_checkpointing
     from megatron.core.dist_checkpointing.serialization import StrictHandling
 
-    from verl.utils.megatron_utils import unwrap_model
+    from ...verl.utils.megatron_utils import unwrap_model
 
     # strict = StrictHandling.IGNORE_ALL if is_value_model else StrictHandling.ASSUME_OK_UNEXPECTED
     strict = StrictHandling.ASSUME_OK_UNEXPECTED
@@ -578,7 +578,7 @@ def get_parallel_gptmodel_from_config(
     # # for layer in parallel_model.decoder.layers:
     # layer.self_attention.core_attention.flash_attention.softmax_scale = None
     if post_process and value:
-        from verl.models.llama.megatron.layers.parallel_linear import LinearForLastLayer
+        from ...verl.models.llama.megatron.layers.parallel_linear import LinearForLastLayer
 
         parallel_model.output_layer = LinearForLastLayer(
             input_size=tfconfig.hidden_size, output_size=1, config=tfconfig

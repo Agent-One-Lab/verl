@@ -15,7 +15,7 @@
 from dataclasses import dataclass, field
 from typing import Optional
 
-from verl.base_config import BaseConfig
+from ....verl.base_config import BaseConfig
 
 from .model import HFModelConfig
 from .rollout import RolloutConfig

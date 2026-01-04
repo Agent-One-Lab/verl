@@ -14,7 +14,7 @@
 
 from typing import Callable
 
-from verl.workers.reward_manager.abstract import AbstractRewardManager
+from ....verl.workers.reward_manager.abstract import AbstractRewardManager
 
 __all__ = ["register", "get_reward_manager_cls"]
 

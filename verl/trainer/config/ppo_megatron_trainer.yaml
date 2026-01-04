@@ -110,7 +110,7 @@ custom_reward_function:
 
 algorithm:
   # Required when using verl.utils.omega_conf_to_dataclass to instantiate dataclass configs
-  _target_: verl.trainer.config.AlgoConfig
+  _target_: agentfly.verl.trainer.config.AlgoConfig
   gamma: 1.0
   lam: 1.0
   adv_estimator: gae
@@ -119,7 +119,7 @@ algorithm:
   kl_penalty: kl # how to estimate kl divergence
   kl_ctrl:
     # Required when using verl.utils.omega_conf_to_dataclass to instantiate dataclass configs
-    _target_: verl.trainer.config.KLControlConfig
+    _target_: agentfly.verl.trainer.config.KLControlConfig
     type: fixed
     kl_coef: 0.001
     horizon: 10000
@@ -164,7 +164,7 @@ trainer:
   use_legacy_worker_impl: auto
 
 global_profiler:
-  _target_: verl.utils.profiler.ProfilerConfig
+  _target_: agentfly.verl.utils.profiler.ProfilerConfig
   tool: null # choose between nsys, npu, torch, torch_memory
   steps: null # profile steps
   profile_continuous_steps: False

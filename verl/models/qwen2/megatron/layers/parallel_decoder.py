@@ -25,7 +25,7 @@ from megatron.core import ModelParallelConfig
 from torch import nn
 from transformers import Qwen2Config
 
-from verl.utils.megatron_utils import TransformerConfig, convert_config
+from ....verl.utils.megatron_utils import TransformerConfig, convert_config
 
 from .parallel_attention import ParallelQwen2Attention, ParallelQwen2AttentionRmPad
 from .parallel_mlp import ParallelQwen2MLP

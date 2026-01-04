@@ -1,5 +1,5 @@
 # Target class for this configuration
-_target_: verl.workers.config.FSDPOptimizerConfig
+_target_: agentfly.verl.workers.config.FSDPOptimizerConfig
 
 # Optimizer class name (e.g., "AdamW", "AdamW8bit", "_AdamW", "Adam")
 optimizer: AdamW

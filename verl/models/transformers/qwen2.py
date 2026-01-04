@@ -21,8 +21,8 @@ from transformers.models.llama.modeling_llama import apply_rotary_pos_emb, repea
 from transformers.utils import logging
 
 # Import compatibility wrapper for flash_attn_supports_top_left_mask
-from verl.utils.transformers_compat import flash_attn_supports_top_left_mask
-from verl.utils.ulysses import (
+from ....verl.utils.transformers_compat import flash_attn_supports_top_left_mask
+from ....verl.utils.ulysses import (
     gather_heads_scatter_seq,
     gather_seq_scatter_heads,
     get_ulysses_sequence_parallel_world_size,

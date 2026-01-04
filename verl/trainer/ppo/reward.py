@@ -25,17 +25,17 @@ import ray
 import torch
 from omegaconf import DictConfig
 
-from verl import DataProto
-from verl.utils.reward_score import default_compute_score
-from verl.utils.transferqueue_utils import tqbridge
-from verl.workers.reward_manager import get_reward_manager_cls
-from verl.workers.reward_manager.abstract import AbstractRewardManager, RawRewardFn
+from ....verl import DataProto
+from ....verl.utils.reward_score import default_compute_score
+from ....verl.utils.transferqueue_utils import tqbridge
+from ....verl.workers.reward_manager import get_reward_manager_cls
+from ....verl.workers.reward_manager.abstract import AbstractRewardManager, RawRewardFn
 
 if TYPE_CHECKING:
-    from verl.experimental.reward.reward_loop.base import RewardLoopManagerBase
+    from ....verl.experimental.reward.reward_loop.base import RewardLoopManagerBase
 else:
     try:
-        from verl.experimental.reward.reward_loop.base import RewardLoopManagerBase
+        from ....verl.experimental.reward.reward_loop.base import RewardLoopManagerBase
     except ImportError:
         RewardLoopManagerBase = None  # type: ignore[assignment,misc]
 

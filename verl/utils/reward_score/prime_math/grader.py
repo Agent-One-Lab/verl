@@ -103,7 +103,7 @@ from sympy.parsing.latex import parse_latex
 from sympy.parsing.sympy_parser import parse_expr
 
 # verl related
-from verl.utils.py_functional import timeout_limit
+from ....verl.utils.py_functional import timeout_limit
 
 
 def is_digit(s):

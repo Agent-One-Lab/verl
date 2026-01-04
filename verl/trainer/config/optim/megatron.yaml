@@ -1,4 +1,4 @@
-_target_: verl.workers.config.McoreOptimizerConfig
+_target_: agentfly.verl.workers.config.McoreOptimizerConfig
 
 # Learning rate
 lr: 1e-3

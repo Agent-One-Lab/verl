@@ -24,15 +24,15 @@ from megatron.core.pipeline_parallel import get_forward_backward_func
 from omegaconf import OmegaConf
 from tensordict import TensorDict
 
-from verl.models.mcore import get_mcore_weight_converter
-from verl.trainer.config import CheckpointConfig
-from verl.utils import tensordict_utils as tu
-from verl.utils.checkpoint.megatron_checkpoint_manager import MegatronCheckpointManager
-from verl.utils.dataset.dataset_utils import DatasetPadMode
-from verl.utils.device import get_device_id, get_device_name
-from verl.utils.megatron.pipeline_parallel import make_batch_generator
-from verl.utils.megatron.tensor_parallel import vocab_parallel_entropy, vocab_parallel_log_probs_from_logits
-from verl.utils.megatron_utils import (
+from .....verl.models.mcore import get_mcore_weight_converter
+from .....verl.trainer.config import CheckpointConfig
+from .....verl.utils import tensordict_utils as tu
+from .....verl.utils.checkpoint.megatron_checkpoint_manager import MegatronCheckpointManager
+from .....verl.utils.dataset.dataset_utils import DatasetPadMode
+from .....verl.utils.device import get_device_id, get_device_name
+from .....verl.utils.megatron.pipeline_parallel import make_batch_generator
+from .....verl.utils.megatron.tensor_parallel import vocab_parallel_entropy, vocab_parallel_log_probs_from_logits
+from .....verl.utils.megatron_utils import (
     load_megatron_model_to_gpu,
     load_megatron_optimizer,
     offload_megatron_model_to_cpu,
@@ -40,8 +40,8 @@ from verl.utils.megatron_utils import (
     per_tensor_generator,
     register_megatron_training_hooks,
 )
-from verl.utils.model import load_mcore_dist_weights, load_megatron_gptmodel_weights
-from verl.workers.config import HFModelConfig, McoreEngineConfig, McoreOptimizerConfig
+from .....verl.utils.model import load_mcore_dist_weights, load_megatron_gptmodel_weights
+from .....verl.workers.config import HFModelConfig, McoreEngineConfig, McoreOptimizerConfig
 
 from ..base import BaseEngine, EngineRegistry
 from ..utils import postprocess_batch_func, prepare_micro_batches
@@ -99,9 +99,9 @@ class MegatronEngine(BaseEngine):
         )
 
     def _build_tf_config(self):
-        from verl.models.mcore import hf_to_mcore_config
-        from verl.models.mcore.config_converter import mapping_string_to_attn_backend
-        from verl.utils.torch_dtypes import PrecisionType
+        from .....verl.models.mcore import hf_to_mcore_config
+        from .....verl.models.mcore.config_converter import mapping_string_to_attn_backend
+        from .....verl.utils.torch_dtypes import PrecisionType
 
         self.param_dtype = PrecisionType.to_dtype(self.engine_config.dtype)
         if self.param_dtype == torch.float16:
@@ -116,7 +116,7 @@ class MegatronEngine(BaseEngine):
         self.vanilla_bridge = self.engine_config.vanilla_mbridge
         if use_mbridge:
             if self.vanilla_bridge:
-                from verl.models.mcore.mbridge import AutoBridge
+                from .....verl.models.mcore.mbridge import AutoBridge
 
                 bridge = AutoBridge.from_config(self.model_config.hf_config, dtype=self.param_dtype)
                 bridge.set_extra_args(**override_transformer_config)
@@ -124,7 +124,7 @@ class MegatronEngine(BaseEngine):
                 tf_config.fp16 = self.param_dtype == torch.float16
                 tf_config.bf16 = self.param_dtype == torch.bfloat16
             else:
-                from verl.models.mcore.bridge import AutoBridge
+                from .....verl.models.mcore.bridge import AutoBridge
 
                 # Use Megatron-Bridge to convert HF config to Megatron config
                 bridge = AutoBridge.from_hf_pretrained(
@@ -172,15 +172,15 @@ class MegatronEngine(BaseEngine):
                 print(f"TF config: {tf_config}")
         self.tf_config = tf_config
 
-        from verl.workers.config.megatron_peft import get_peft_cls
+        from .....verl.workers.config.megatron_peft import get_peft_cls
 
         self.peft_cls = get_peft_cls(
             model_config=self.model_config, bridge=self.bridge, provider=self.provider, dtype=self.param_dtype
         )
 
     def _build_megatron_module(self):
-        from verl.utils.megatron_utils import McoreModuleWrapperConfig, make_megatron_module
-        from verl.utils.model import print_model_size
+        from .....verl.utils.megatron_utils import McoreModuleWrapperConfig, make_megatron_module
+        from .....verl.utils.model import print_model_size
 
         # TODO: add more cases
         is_value_model = (
@@ -248,7 +248,7 @@ class MegatronEngine(BaseEngine):
         return module
 
     def _build_optimizer(self):
-        from verl.utils.megatron.optimizer import get_megatron_optimizer, init_megatron_optim_config
+        from .....verl.utils.megatron.optimizer import get_megatron_optimizer, init_megatron_optim_config
 
         optim_config_megatron = init_megatron_optim_config(self.optimizer_config, self.param_dtype == torch.float16)
         optimizer = get_megatron_optimizer(model=self.module, config=optim_config_megatron)
@@ -256,7 +256,7 @@ class MegatronEngine(BaseEngine):
         return optimizer
 
     def _build_lr_scheduler(self):
-        from verl.utils.megatron.optimizer import get_megatron_optimizer_param_scheduler
+        from .....verl.utils.megatron.optimizer import get_megatron_optimizer_param_scheduler
 
         optimizer_scheduler = get_megatron_optimizer_param_scheduler(
             optimizer=self.optimizer, config=self.optimizer_config
@@ -363,7 +363,7 @@ class MegatronEngine(BaseEngine):
         Returns:
             current_lr (float or list[float]): Updated learning rate(s).
         """
-        from verl.utils.megatron.optimizer import get_megatron_last_lr
+        from .....verl.utils.megatron.optimizer import get_megatron_last_lr
 
         self.lr_scheduler.step(1)
         return get_megatron_last_lr(self.optimizer)
@@ -613,7 +613,7 @@ class MegatronEngineWithLMHead(MegatronEngine):
 
         multi_modal_inputs = {}
         if "multi_modal_inputs" in batch:
-            from verl.utils.model import extract_multi_modal_inputs
+            from .....verl.utils.model import extract_multi_modal_inputs
 
             indices = batch.get("multi_modal_inputs_idx", None)
             multi_modal_inputs = extract_multi_modal_inputs(batch["multi_modal_inputs"], indices)
@@ -653,7 +653,7 @@ class MegatronEngineWithLMHead(MegatronEngine):
         else:
             raise NotImplementedError(f"Pad mode {pad_mode} is not supported for megatron engine")
 
-        from verl.models.mcore import get_mcore_forward_no_padding_fn
+        from .....verl.models.mcore import get_mcore_forward_no_padding_fn
 
         if use_fused_kernels:
             raise NotImplementedError("Fused kernels are not supported for megatron engine")
@@ -729,7 +729,7 @@ class MegatronEngineWithValueHead(MegatronEngineWithLMHead):
         input_ids = model_inputs["input_ids"]
         multi_modal_inputs = model_inputs["multi_modal_inputs"]
 
-        from verl.models.mcore import get_mcore_forward_no_padding_fn
+        from .....verl.models.mcore import get_mcore_forward_no_padding_fn
 
         forward_fn = get_mcore_forward_no_padding_fn(self.model_config.hf_config)
 

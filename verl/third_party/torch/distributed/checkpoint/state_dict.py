@@ -125,7 +125,7 @@ from torch.nn.modules.module import _IncompatibleKeys
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils._pytree import tree_map_only
 
-from verl.third_party.torch.distributed._state_dict_utils import (
+from ....verl.third_party.torch.distributed._state_dict_utils import (
     _broadcast_state_dict,
     _distribute_state_dict,
     _flatten_state_dict,

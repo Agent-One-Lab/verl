@@ -22,10 +22,10 @@ from megatron.core.models.gpt.gpt_model import GPTModel
 from megatron.core.utils import make_viewless_tensor
 from torch import Tensor
 
-from verl.models.mcore.util import preprocess_packed_seqs
-from verl.utils.kernel.linear_cross_entropy import linear_cross_entropy
-from verl.utils.megatron_utils import unwrap_model
-from verl.utils.model import CausalLMOutputForPPO
+from ....verl.models.mcore.util import preprocess_packed_seqs
+from ....verl.utils.kernel.linear_cross_entropy import linear_cross_entropy
+from ....verl.utils.megatron_utils import unwrap_model
+from ....verl.utils.model import CausalLMOutputForPPO
 
 from .util import postprocess_packed_seqs, postprocess_packed_seqs_for_dict_output
 

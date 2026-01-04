@@ -22,7 +22,7 @@ from dataclasses import dataclass
 
 import ray
 
-from verl.utils.device import (
+from ....verl.utils.device import (
     get_torch_device,
     get_visible_devices_keyword,
     is_npu_available,
@@ -164,7 +164,7 @@ class Worker(WorkerHelper):
 
     @register(dispatch_mode=Dispatch.ONE_TO_ALL, blocking=True)
     def create_transferqueue_client(self, config):
-        from verl.utils.transferqueue_utils import create_transferqueue_client
+        from ....verl.utils.transferqueue_utils import create_transferqueue_client
 
         create_transferqueue_client(
             client_id=f"worker_{self.rank}",
@@ -235,7 +235,7 @@ class Worker(WorkerHelper):
         return self.fused_worker_dict.get(worker_name, None)
 
     def _setup_env_cuda_visible_devices(self):
-        from verl.utils.ray_utils import ray_noset_visible_devices
+        from ....verl.utils.ray_utils import ray_noset_visible_devices
 
         is_ray_noset_visible_devices = ray_noset_visible_devices()
 

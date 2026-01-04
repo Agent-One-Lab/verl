@@ -68,12 +68,6 @@ verl is fast with:
    :maxdepth: 1
    :caption: Algorithms
 
-<<<<<<< HEAD
-   experiment/ppo
-
-
-.. toctree:: 
-=======
    algo/ppo.md
    algo/grpo.md
    algo/collabllm.md
@@ -88,7 +82,6 @@ verl is fast with:
    algo/rollout_corr_math.md
 
 .. toctree::
->>>>>>> main
    :maxdepth: 1
    :caption: PPO Trainer and Workers
 
@@ -112,15 +105,8 @@ verl is fast with:
 
 .. toctree::
    :maxdepth: 1
-<<<<<<< HEAD
-   :caption: Advance Usage and Extension
-
-   advance/placement
-   advance/dpo_extension
-=======
    :caption: Adding new models
 
->>>>>>> main
    advance/fsdp_extension
    advance/megatron_extension
 
@@ -129,9 +115,6 @@ verl is fast with:
    :caption: Advanced Features
 
    advance/checkpoint
-<<<<<<< HEAD
-   sglang_multiturn/multiturn.rst
-=======
    advance/rope
    advance/attention_implementation
    advance/ppo_lora.rst
@@ -162,21 +145,15 @@ verl is fast with:
    ascend_tutorial/ascend_profiling_en.rst
    ascend_tutorial/dockerfile_build_guidance.rst
    ascend_tutorial/ascend_sglang_quick_start.rst
->>>>>>> main
 
 .. toctree::
    :maxdepth: 1
    :caption: API References
 
-<<<<<<< HEAD
-   data
-   api/utils
-=======
    api/data
    api/single_controller.rst
    api/trainer.rst
    api/utils.rst
->>>>>>> main
 
 
 .. toctree::

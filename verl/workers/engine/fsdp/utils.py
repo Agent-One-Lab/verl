@@ -13,7 +13,7 @@
 # limitations under the License.
 from torch.distributed.device_mesh import init_device_mesh
 
-from verl.utils.device import get_device_name
+from .....verl.utils.device import get_device_name
 
 
 def create_device_mesh(world_size, fsdp_size):

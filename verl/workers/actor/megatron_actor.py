@@ -36,18 +36,18 @@ from megatron.core.pipeline_parallel import get_forward_backward_func
 from omegaconf import OmegaConf
 from torch import nn
 
-from verl import DataProto
-from verl.trainer.ppo.core_algos import agg_loss, get_policy_loss_fn, kl_penalty
-from verl.utils.device import get_device_id, get_torch_device
-from verl.utils.megatron.pipeline_parallel import make_batch_generator
-from verl.utils.megatron.tensor_parallel import vocab_parallel_entropy, vocab_parallel_log_probs_from_logits
-from verl.utils.megatron_utils import get_model_config
-from verl.utils.profiler import GPUMemoryLogger
-from verl.utils.profiler.profile import Profiler
-from verl.utils.py_functional import append_to_dict
-from verl.utils.seqlen_balancing import get_reverse_idx, rearrange_micro_batches
-from verl.utils.torch_functional import broadcast_dict_tensor
-from verl.workers.actor import BasePPOActor
+from ...verl import DataProto
+from ...verl.trainer.ppo.core_algos import agg_loss, get_policy_loss_fn, kl_penalty
+from ...verl.utils.device import get_device_id, get_torch_device
+from ...verl.utils.megatron.pipeline_parallel import make_batch_generator
+from ...verl.utils.megatron.tensor_parallel import vocab_parallel_entropy, vocab_parallel_log_probs_from_logits
+from ...verl.utils.megatron_utils import get_model_config
+from ...verl.utils.profiler import GPUMemoryLogger
+from ...verl.utils.profiler.profile import Profiler
+from ...verl.utils.py_functional import append_to_dict
+from ...verl.utils.seqlen_balancing import get_reverse_idx, rearrange_micro_batches
+from ...verl.utils.torch_functional import broadcast_dict_tensor
+from ...verl.workers.actor import BasePPOActor
 
 __all__ = ["MegatronPPOActor"]
 
@@ -132,7 +132,7 @@ class MegatronPPOActor(BasePPOActor):
         self.use_fused_kernels = self.config.get("use_fused_kernels", False)
         if self.use_fused_kernels and not getattr(self.config, "overlap_moe_expert_parallel_comm", False):
             # do not patch if overlap_moe_expert_parallel_comm is enabled
-            from verl.models.mcore.model_forward_fused import patch_fused_forward
+            from ...verl.models.mcore.model_forward_fused import patch_fused_forward
 
             for model in self.actor_module:
                 patch_fused_forward(model)
@@ -470,7 +470,7 @@ class MegatronPPOActor(BasePPOActor):
                 if loss_mode != "rollout_correction" and rollout_log_prob is not None:
                     # Compute metrics using CURRENT policy π_θ vs π_rollout
                     # Tracks evolving off-policy gap as π_θ updates during mini-batch training
-                    from verl.trainer.ppo.rollout_corr_helper import compute_rollout_corr_metrics_from_logprobs
+                    from ...verl.trainer.ppo.rollout_corr_helper import compute_rollout_corr_metrics_from_logprobs
 
                     rollout_corr_metrics = compute_rollout_corr_metrics_from_logprobs(
                         log_prob=log_prob,
@@ -527,7 +527,7 @@ class MegatronPPOActor(BasePPOActor):
                 assert isinstance(model, GPTModel), "model must be a GPTModel"
                 assert self.use_fused_kernels, "use_fused_kernels must be enabled to return the schedule plan"
                 # TODO: support VLM with MoE
-                from verl.models.mcore.model_forward_1f1b_overlap import gptmodel_forward_1f1b_overlap
+                from ...verl.models.mcore.model_forward_1f1b_overlap import gptmodel_forward_1f1b_overlap
 
             batch = next(batch_iter)
             batch = batch.to(get_device_id())
@@ -539,7 +539,7 @@ class MegatronPPOActor(BasePPOActor):
 
             multi_modal_inputs = {}
             if "multi_modal_inputs" in batch:
-                from verl.utils.model import extract_multi_modal_inputs
+                from ...verl.utils.model import extract_multi_modal_inputs
 
                 indices = batch.get("multi_modal_inputs_idx", None)
                 multi_modal_inputs = extract_multi_modal_inputs(batch["multi_modal_inputs"], indices)
@@ -551,7 +551,7 @@ class MegatronPPOActor(BasePPOActor):
             label_mask[:, : -response_length - 1] = False
             label_mask[:, -1] = False
 
-            from verl.models.mcore import get_mcore_forward_fn, get_mcore_forward_fused_fn
+            from ...verl.models.mcore import get_mcore_forward_fn, get_mcore_forward_fused_fn
 
             if self.use_fused_kernels:
                 forward_fn = get_mcore_forward_fused_fn(self.hf_config)

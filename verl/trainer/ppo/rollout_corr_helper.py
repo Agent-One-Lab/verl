@@ -69,10 +69,10 @@ from typing import Any, Optional
 
 import torch
 
-import verl.utils.torch_functional as verl_F
-from verl.protocol import DataProto
-from verl.trainer.config.algorithm import RolloutCorrectionConfig
-from verl.workers.config.actor import PolicyLossConfig
+from ....verl.utils import torch_functional as verl_F
+from ....verl.protocol import DataProto
+from ....verl.trainer.config.algorithm import RolloutCorrectionConfig
+from ....verl.workers.config.actor import PolicyLossConfig
 
 # Safety bound to prevent numerical overflow/underflow when exponentiating
 # exp(20) ≈ 485 million (upper limit for stable weights), exp(-20) ≈ 2e-9 (lower limit)

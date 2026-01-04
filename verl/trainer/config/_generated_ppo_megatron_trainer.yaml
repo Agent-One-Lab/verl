@@ -6,7 +6,7 @@
 actor_rollout_ref:
   actor:
     optim:
-      _target_: verl.workers.config.McoreOptimizerConfig
+      _target_: agentfly.verl.workers.config.McoreOptimizerConfig
       lr: 1.0e-06
       lr_warmup_steps_ratio: 0.0
       total_training_steps: -1
@@ -27,7 +27,7 @@ actor_rollout_ref:
       use_checkpoint_opt_param_scheduler: false
       override_optimizer_config: {}
     megatron:
-      _target_: verl.workers.config.McoreEngineConfig
+      _target_: agentfly.verl.workers.config.McoreEngineConfig
       param_offload: false
       grad_offload: false
       optimizer_offload: false
@@ -56,7 +56,7 @@ actor_rollout_ref:
       vanilla_mbridge: true
       forward_only: false
       dtype: bfloat16
-    _target_: verl.workers.config.McoreActorConfig
+    _target_: agentfly.verl.workers.config.McoreActorConfig
     rollout_n: ${oc.select:actor_rollout_ref.rollout.n,1}
     strategy: megatron
     ppo_mini_batch_size: 256
@@ -69,7 +69,7 @@ actor_rollout_ref:
     clip_ratio_high: 0.2
     freeze_vision_tower: false
     policy_loss:
-      _target_: verl.workers.config.PolicyLossConfig
+      _target_: agentfly.verl.workers.config.PolicyLossConfig
       loss_mode: vanilla
       clip_cov_ratio: 0.0002
       clip_cov_lb: 1.0
@@ -87,7 +87,7 @@ actor_rollout_ref:
     ppo_epochs: 1
     shuffle: false
     checkpoint:
-      _target_: verl.trainer.config.CheckpointConfig
+      _target_: agentfly.verl.trainer.config.CheckpointConfig
       save_contents:
       - model
       - optimizer
@@ -96,7 +96,7 @@ actor_rollout_ref:
       async_save: false
     use_fused_kernels: ${oc.select:actor_rollout_ref.model.use_fused_kernels,false}
     profiler:
-      _target_: verl.utils.profiler.ProfilerConfig
+      _target_: agentfly.verl.utils.profiler.ProfilerConfig
       tool: ${oc.select:global_profiler.tool,null}
       enable: false
       all_ranks: false
@@ -104,20 +104,20 @@ actor_rollout_ref:
       save_path: ${oc.select:global_profiler.save_path,null}
       tool_config:
         nsys:
-          _target_: verl.utils.profiler.config.NsightToolConfig
+          _target_: agentfly.verl.utils.profiler.config.NsightToolConfig
           discrete: ${oc.select:global_profiler.global_tool_config.nsys.discrete}
         npu:
-          _target_: verl.utils.profiler.config.NPUToolConfig
+          _target_: agentfly.verl.utils.profiler.config.NPUToolConfig
           contents: []
           level: level1
           analysis: true
           discrete: false
         torch:
-          _target_: verl.utils.profiler.config.TorchProfilerToolConfig
+          _target_: agentfly.verl.utils.profiler.config.TorchProfilerToolConfig
           step_start: 0
           step_end: null
         torch_memory:
-          _target_: verl.utils.profiler.config.TorchMemoryToolConfig
+          _target_: agentfly.verl.utils.profiler.config.TorchMemoryToolConfig
           trace_alloc_max_entries: ${oc.select:global_profiler.global_tool_config.torch_memory.trace_alloc_max_entries,100000}
           stack_depth: ${oc.select:global_profiler.global_tool_config.torch_memory.stack_depth,32}
     data_loader_seed: 42
@@ -131,7 +131,7 @@ actor_rollout_ref:
     log_prob_use_dynamic_bsz: ${oc.select:actor_rollout_ref.actor.use_dynamic_bsz,false}
     log_prob_max_token_len_per_gpu: ${oc.select:actor_rollout_ref.actor.ppo_max_token_len_per_gpu,16384}
     profiler:
-      _target_: verl.utils.profiler.ProfilerConfig
+      _target_: agentfly.verl.utils.profiler.ProfilerConfig
       tool: ${oc.select:global_profiler.tool,null}
       enable: false
       all_ranks: false
@@ -139,24 +139,24 @@ actor_rollout_ref:
       save_path: ${oc.select:global_profiler.save_path,null}
       tool_config:
         nsys:
-          _target_: verl.utils.profiler.config.NsightToolConfig
+          _target_: agentfly.verl.utils.profiler.config.NsightToolConfig
           discrete: ${oc.select:global_profiler.global_tool_config.nsys.discrete}
         npu:
-          _target_: verl.utils.profiler.config.NPUToolConfig
+          _target_: agentfly.verl.utils.profiler.config.NPUToolConfig
           contents: []
           level: level1
           analysis: true
           discrete: false
         torch:
-          _target_: verl.utils.profiler.config.TorchProfilerToolConfig
+          _target_: agentfly.verl.utils.profiler.config.TorchProfilerToolConfig
           step_start: 0
           step_end: null
         torch_memory:
-          _target_: verl.utils.profiler.config.TorchMemoryToolConfig
+          _target_: agentfly.verl.utils.profiler.config.TorchMemoryToolConfig
           trace_alloc_max_entries: ${oc.select:global_profiler.global_tool_config.torch_memory.trace_alloc_max_entries,100000}
           stack_depth: ${oc.select:global_profiler.global_tool_config.torch_memory.stack_depth,32}
     megatron:
-      _target_: verl.workers.config.McoreEngineConfig
+      _target_: agentfly.verl.workers.config.McoreEngineConfig
       param_offload: ${oc.select:actor_rollout_ref.actor.megatron.param_offload,False}
       grad_offload: false
       optimizer_offload: false
@@ -179,10 +179,10 @@ actor_rollout_ref:
       vanilla_mbridge: ${oc.select:actor_rollout_ref.actor.megatron.vanilla_mbridge,True}
       forward_only: true
       dtype: bfloat16
-    _target_: verl.workers.config.McoreActorConfig
+    _target_: agentfly.verl.workers.config.McoreActorConfig
     load_weight: true
   rollout:
-    _target_: verl.workers.config.RolloutConfig
+    _target_: agentfly.verl.workers.config.RolloutConfig
     name: ???
     mode: async
     temperature: 1.0
@@ -219,14 +219,14 @@ actor_rollout_ref:
       vllm: {}
       sglang: {}
     val_kwargs:
-      _target_: verl.workers.config.SamplingConfig
+      _target_: agentfly.verl.workers.config.SamplingConfig
       top_k: -1
       top_p: 1.0
       temperature: 0
       'n': 1
       do_sample: false
     multi_turn:
-      _target_: verl.workers.config.MultiTurnConfig
+      _target_: agentfly.verl.workers.config.MultiTurnConfig
       enable: false
       max_assistant_turns: null
       tool_config_path: null
@@ -241,17 +241,17 @@ actor_rollout_ref:
       num_repeat_rollouts: null
     calculate_log_probs: false
     agent:
-      _target_: verl.workers.config.AgentLoopConfig
+      _target_: agentfly.verl.workers.config.AgentLoopConfig
       num_workers: 8
       default_agent_loop: single_turn_agent
       agent_loop_config_path: null
       custom_async_server:
-        _target_: verl.workers.config.CustomAsyncServerConfig
+        _target_: agentfly.verl.workers.config.CustomAsyncServerConfig
         path: null
         name: null
     update_weights_bucket_megabytes: 512
     trace:
-      _target_: verl.workers.config.TraceConfig
+      _target_: agentfly.verl.workers.config.TraceConfig
       backend: null
       token2text: false
       max_samples_per_step_per_worker: null
@@ -259,7 +259,7 @@ actor_rollout_ref:
     skip_dump_dir: /tmp/rollout_dump
     skip_tokenizer_init: true
     profiler:
-      _target_: verl.utils.profiler.ProfilerConfig
+      _target_: agentfly.verl.utils.profiler.ProfilerConfig
       tool: ${oc.select:global_profiler.tool,null}
       enable: ${oc.select:actor_rollout_ref.actor.profiler.enable,false}
       all_ranks: ${oc.select:actor_rollout_ref.actor.profiler.all_ranks,false}
@@ -267,7 +267,7 @@ actor_rollout_ref:
       save_path: ${oc.select:global_profiler.save_path,null}
       tool_config: ${oc.select:actor_rollout_ref.actor.profiler.tool_config,null}
     prometheus:
-      _target_: verl.workers.config.PrometheusConfig
+      _target_: agentfly.verl.workers.config.PrometheusConfig
       enable: false
       port: 9090
       file: /tmp/ray/session_latest/metrics/prometheus/prometheus.yml
@@ -277,7 +277,7 @@ actor_rollout_ref:
       qkv_layer_name: qkv
       gate_proj_layer_name: gate_up
   model:
-    _target_: verl.workers.config.HFModelConfig
+    _target_: agentfly.verl.workers.config.HFModelConfig
     path: ~/models/deepseek-llm-7b-chat
     hf_config_path: null
     tokenizer_path: null
@@ -365,7 +365,7 @@ data:
   apply_chat_template_kwargs: {}
 critic:
   optim:
-    _target_: verl.workers.config.McoreOptimizerConfig
+    _target_: agentfly.verl.workers.config.McoreOptimizerConfig
     lr: 1.0e-05
     lr_warmup_steps_ratio: 0.0
     total_training_steps: -1
@@ -386,7 +386,7 @@ critic:
     use_checkpoint_opt_param_scheduler: false
     override_optimizer_config: {}
   megatron:
-    _target_: verl.workers.config.McoreEngineConfig
+    _target_: agentfly.verl.workers.config.McoreEngineConfig
     param_offload: false
     grad_offload: false
     optimizer_offload: false
@@ -415,7 +415,7 @@ critic:
     vanilla_mbridge: true
     forward_only: false
     dtype: bfloat16
-  _target_: verl.workers.config.McoreCriticConfig
+  _target_: agentfly.verl.workers.config.McoreCriticConfig
   rollout_n: ${oc.select:actor_rollout_ref.rollout.n,1}
   strategy: megatron
   enable: null
@@ -428,7 +428,7 @@ critic:
         freeze_moe_router: false
     external_lib: ${oc.select:actor_rollout_ref.model.external_lib,null}
     trust_remote_code: ${oc.select:actor_rollout_ref.model.trust_remote_code,false}
-    _target_: verl.trainer.config.BaseModelConfig
+    _target_: agentfly.verl.trainer.config.BaseModelConfig
     lora:
       type: lora
       rank: 0
@@ -460,7 +460,7 @@ critic:
   cliprange_value: 0.5
   loss_agg_mode: ${oc.select:actor_rollout_ref.actor.loss_agg_mode,token-mean}
   checkpoint:
-    _target_: verl.trainer.config.CheckpointConfig
+    _target_: agentfly.verl.trainer.config.CheckpointConfig
     save_contents:
     - model
     - optimizer
@@ -468,7 +468,7 @@ critic:
     load_contents: ${.save_contents}
     async_save: false
   profiler:
-    _target_: verl.utils.profiler.ProfilerConfig
+    _target_: agentfly.verl.utils.profiler.ProfilerConfig
     tool: ${oc.select:global_profiler.tool,null}
     enable: false
     all_ranks: false
@@ -476,20 +476,20 @@ critic:
     save_path: ${oc.select:global_profiler.save_path,null}
     tool_config:
       nsys:
-        _target_: verl.utils.profiler.config.NsightToolConfig
+        _target_: agentfly.verl.utils.profiler.config.NsightToolConfig
         discrete: ${oc.select:global_profiler.global_tool_config.nsys.discrete}
       npu:
-        _target_: verl.utils.profiler.config.NPUToolConfig
+        _target_: agentfly.verl.utils.profiler.config.NPUToolConfig
         contents: []
         level: level1
         analysis: true
         discrete: false
       torch:
-        _target_: verl.utils.profiler.config.TorchProfilerToolConfig
+        _target_: agentfly.verl.utils.profiler.config.TorchProfilerToolConfig
         step_start: 0
         step_end: null
       torch_memory:
-        _target_: verl.utils.profiler.config.TorchMemoryToolConfig
+        _target_: agentfly.verl.utils.profiler.config.TorchMemoryToolConfig
         trace_alloc_max_entries: ${oc.select:global_profiler.global_tool_config.torch_memory.trace_alloc_max_entries,100000}
         stack_depth: ${oc.select:global_profiler.global_tool_config.torch_memory.stack_depth,32}
   nccl_timeout: 600
@@ -519,7 +519,7 @@ reward_model:
     max_concurrent: 64
     memory_limit_mb: 1024
   profiler:
-    _target_: verl.utils.profiler.ProfilerConfig
+    _target_: agentfly.verl.utils.profiler.ProfilerConfig
     tool: ${oc.select:global_profiler.tool,null}
     enable: false
     all_ranks: false
@@ -528,7 +528,7 @@ reward_model:
     tool_config: ${oc.select:actor_rollout_ref.actor.profiler.tool_config,null}
   nccl_timeout: 600
   megatron:
-    _target_: verl.workers.config.MegatronEngineConfig
+    _target_: agentfly.verl.workers.config.MegatronEngineConfig
     param_offload: false
     tensor_model_parallel_size: 1
     expert_model_parallel_size: 1
@@ -558,7 +558,7 @@ algorithm:
     bypass_mode: false
     use_policy_gradient: false
     rollout_is_batch_normalize: false
-  _target_: verl.trainer.config.AlgoConfig
+  _target_: agentfly.verl.trainer.config.AlgoConfig
   gamma: 1.0
   lam: 1.0
   adv_estimator: gae
@@ -566,7 +566,7 @@ algorithm:
   use_kl_in_reward: false
   kl_penalty: kl
   kl_ctrl:
-    _target_: verl.trainer.config.KLControlConfig
+    _target_: agentfly.verl.trainer.config.KLControlConfig
     type: fixed
     kl_coef: 0.001
     horizon: 10000
@@ -607,7 +607,7 @@ trainer:
   rollout_data_dir: null
   use_legacy_worker_impl: auto
 global_profiler:
-  _target_: verl.utils.profiler.ProfilerConfig
+  _target_: agentfly.verl.utils.profiler.ProfilerConfig
   tool: null
   steps: null
   profile_continuous_steps: false

@@ -20,7 +20,7 @@ from megatron.core import ModelParallelConfig
 from torch import nn
 from transformers import LlamaConfig
 
-from verl.utils.megatron import sequence_parallel as sp_utils
+from ......verl.utils.megatron import sequence_parallel as sp_utils
 
 
 class ParallelLlamaRMSNorm(nn.Module):

@@ -46,7 +46,7 @@ try:
 except ImportError:
     HAVE_TRITON = False
 
-from verl.utils.device import get_torch_device
+from ....verl.utils.device import get_torch_device
 
 if not HAVE_TRITON:
     from contextlib import contextmanager

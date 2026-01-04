@@ -22,7 +22,7 @@ from enum import Enum
 
 from omegaconf import OmegaConf
 
-from verl.tools.schemas import OpenAIFunctionToolSchema
+from ....verl.tools.schemas import OpenAIFunctionToolSchema
 
 logger = logging.getLogger(__file__)
 logger.setLevel(os.getenv("VERL_LOGGING_LEVEL", "WARN"))
@@ -34,7 +34,7 @@ class ToolType(Enum):
 
 
 async def initialize_mcp_tool(tool_cls, tool_config) -> list:
-    from verl.tools.utils.mcp_clients.McpClientManager import ClientManager
+    from ...verl.tools.utils.mcp_clients.McpClientManager import ClientManager
 
     tool_list = []
     mcp_servers_config_path = tool_config.mcp.mcp_servers_config_path

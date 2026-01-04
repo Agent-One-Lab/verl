@@ -30,22 +30,22 @@ except ImportError:
 
 from dataclasses import asdict
 
-from verl import DataProto
-from verl.protocol import all_gather_data_proto
-from verl.third_party.vllm import LLM, VLLM_SLEEP_LEVEL
-from verl.third_party.vllm import parallel_state as vllm_ps
-from verl.utils.device import get_device_id, get_device_name, get_torch_device, set_expandable_segments
-from verl.utils.fsdp_utils import (
+from ....verl import DataProto
+from ....verl.protocol import all_gather_data_proto
+from ....verl.third_party.vllm import LLM, VLLM_SLEEP_LEVEL
+from ....verl.third_party.vllm import parallel_state as vllm_ps
+from ....verl.utils.device import get_device_id, get_device_name, get_torch_device, set_expandable_segments
+from ....verl.utils.fsdp_utils import (
     fsdp_version,
     layered_summon_lora_params,
     load_fsdp_model_to_gpu,
     offload_fsdp_model_to_cpu,
 )
-from verl.utils.import_utils import deprecated
-from verl.utils.model import check_exclude_modules, check_target_modules, convert_weight_keys
-from verl.utils.profiler import GPUMemoryLogger, log_gpu_memory_usage, simple_timer
-from verl.utils.torch_functional import check_device_is_available
-from verl.utils.vllm import TensorLoRARequest, VLLMHijack, is_version_ge
+from ....verl.utils.import_utils import deprecated
+from ....verl.utils.model import check_exclude_modules, check_target_modules, convert_weight_keys
+from ....verl.utils.profiler import GPUMemoryLogger, log_gpu_memory_usage, simple_timer
+from ....verl.utils.torch_functional import check_device_is_available
+from ....verl.utils.vllm import TensorLoRARequest, VLLMHijack, is_version_ge
 
 from .base import BaseShardingManager
 
@@ -340,7 +340,7 @@ class FSDPVLLMShardingManager(BaseShardingManager):
 
                 updated_params = {replace_lora_wrapper(k): v for k, v in updated_params.items()}
 
-        from verl.utils.vllm.patch import patch_vllm_moe_model_weight_loader
+        from ....verl.utils.vllm.patch import patch_vllm_moe_model_weight_loader
 
         patch_vllm_moe_model_weight_loader(model)
         device = get_device_id()  # used when fsdp2 set cpu_offload_policy

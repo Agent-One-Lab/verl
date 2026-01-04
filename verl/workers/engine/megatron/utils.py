@@ -13,7 +13,7 @@
 # limitations under the License.
 
 
-from verl.utils.device import get_torch_device
+from .....verl.utils.device import get_torch_device
 
 
 def set_random_seed(seed):

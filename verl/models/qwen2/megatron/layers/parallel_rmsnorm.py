@@ -20,7 +20,7 @@ from megatron.core import ModelParallelConfig
 from torch import nn
 from transformers import Qwen2Config
 
-from verl.utils.megatron import sequence_parallel as sp_utils
+from ......verl.utils.megatron import sequence_parallel as sp_utils
 
 
 class ParallelQwen2RMSNorm(nn.Module):

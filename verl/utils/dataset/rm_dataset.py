@@ -20,7 +20,7 @@ import pandas as pd
 import torch
 from torch.utils.data import Dataset
 
-from verl.utils import hf_tokenizer
+from ....verl.utils import hf_tokenizer
 
 
 def download_files_distributed(download_fn):
@@ -76,7 +76,7 @@ class RMDataset(Dataset):
 
     def _download(self):
         def _download_files():
-            from verl.utils.fs import copy, is_non_local
+            from ....verl.utils.fs import copy, is_non_local
 
             os.makedirs(self.cache_dir, exist_ok=True)
             assert os.path.exists(self.cache_dir)

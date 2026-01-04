@@ -20,16 +20,16 @@ from enum import Enum
 from typing import Any, Optional
 from uuid import uuid4
 
-from verl.experimental.agent_loop.agent_loop import AgentLoopBase, AgentLoopOutput, register
-from verl.experimental.agent_loop.tool_parser import FunctionCall, ToolParser
-from verl.experimental.agent_loop.utils import add_generation_prompt_for_gpt_oss, format_gpt_oss_tool_response_manually
-from verl.interactions.base import BaseInteraction
-from verl.interactions.utils.interaction_registry import initialize_interactions_from_config
-from verl.tools.schemas import ToolResponse
-from verl.tools.utils.tool_registry import initialize_tools_from_config
-from verl.utils.chat_template import initialize_system_prompt
-from verl.utils.profiler import simple_timer
-from verl.utils.rollout_trace import rollout_trace_op
+from ....verl.experimental.agent_loop.agent_loop import AgentLoopBase, AgentLoopOutput, register
+from ....verl.experimental.agent_loop.tool_parser import FunctionCall, ToolParser
+from ....verl.experimental.agent_loop.utils import add_generation_prompt_for_gpt_oss, format_gpt_oss_tool_response_manually
+from ....verl.interactions.base import BaseInteraction
+from ....verl.interactions.utils.interaction_registry import initialize_interactions_from_config
+from ....verl.tools.schemas import ToolResponse
+from ....verl.tools.utils.tool_registry import initialize_tools_from_config
+from ....verl.utils.chat_template import initialize_system_prompt
+from ....verl.utils.profiler import simple_timer
+from ....verl.utils.rollout_trace import rollout_trace_op
 
 logger = logging.getLogger(__file__)
 logger.setLevel(os.getenv("VERL_LOGGING_LEVEL", "WARN"))

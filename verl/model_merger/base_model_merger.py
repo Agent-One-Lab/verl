@@ -28,7 +28,7 @@ from transformers import (
     GenerationConfig,
 )
 
-from verl.utils import hf_processor, hf_tokenizer
+from ...verl.utils import hf_processor, hf_tokenizer
 
 
 def parse_args():

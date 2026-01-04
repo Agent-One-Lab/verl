@@ -139,7 +139,7 @@ class Tracking:
             self.logger["tensorboard"] = _TensorboardAdapter(project_name, experiment_name)
 
         if "console" in default_backend:
-            from verl.utils.logger import LocalLogger
+            from ...verl.utils.logger import LocalLogger
 
             self.console_logger = LocalLogger(print_to_console=True)
             self.logger["console"] = self.console_logger
@@ -155,21 +155,55 @@ class Tracking:
             if backend is None or default_backend in backend:
                 logger_instance.log(data=data, step=step)
 
+    def finish(self):
+        """Explicitly finish all loggers. Call this before process exit for clean shutdown."""
+        self._cleanup_loggers()
+
     def __del__(self):
-        if "wandb" in self.logger:
-            self.logger["wandb"].finish(exit_code=0)
-        if "swanlab" in self.logger:
-            self.logger["swanlab"].finish()
-        if "vemlp_wandb" in self.logger:
-            self.logger["vemlp_wandb"].finish(exit_code=0)
-        if "tensorboard" in self.logger:
-            self.logger["tensorboard"].finish()
-        if "clearml" in self.logger:
-            self.logger["clearml"].finish()
-        if "trackio" in self.logger:
-            self.logger["trackio"].finish()
-        if "file" in self.logger:
-            self.logger["file"].finish()
+        # Use the same cleanup logic
+        self._cleanup_loggers()
+
+    def _cleanup_loggers(self):
+        """Gracefully handle cleanup errors, especially during process shutdown.
+        
+        These errors are harmless and occur when transports are already closed.
+        """
+        try:
+            if "wandb" in self.logger:
+                self.logger["wandb"].finish(exit_code=0)
+        except (RuntimeError, AttributeError, Exception):
+            # Ignore cleanup errors during shutdown (transport already closed, etc.)
+            pass
+        try:
+            if "swanlab" in self.logger:
+                self.logger["swanlab"].finish()
+        except (RuntimeError, AttributeError, Exception):
+            pass
+        try:
+            if "vemlp_wandb" in self.logger:
+                self.logger["vemlp_wandb"].finish(exit_code=0)
+        except (RuntimeError, AttributeError, Exception):
+            pass
+        try:
+            if "tensorboard" in self.logger:
+                self.logger["tensorboard"].finish()
+        except (RuntimeError, AttributeError, Exception):
+            pass
+        try:
+            if "clearml" in self.logger:
+                self.logger["clearml"].finish()
+        except (RuntimeError, AttributeError, Exception):
+            pass
+        try:
+            if "trackio" in self.logger:
+                self.logger["trackio"].finish()
+        except (RuntimeError, AttributeError, Exception):
+            pass
+        try:
+            if "file" in self.logger:
+                self.logger["file"].finish()
+        except (RuntimeError, AttributeError, Exception):
+            pass
 
 
 class ClearMLLogger:

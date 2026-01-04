@@ -17,7 +17,7 @@ import time
 import torch
 import torch.distributed as dist
 
-from verl.utils.device import get_device_id, get_torch_device
+from ......verl.utils.device import get_device_id, get_torch_device
 
 
 def _megatron_calc_layer_map(config):
@@ -61,8 +61,8 @@ def load_state_dict_to_megatron_llama(
     from megatron.core.transformer.module import Float16Module
     from torch.nn.parallel import DistributedDataParallel as torchDDP
 
-    from verl.utils.logger import print_rank_0
-    from verl.utils.megatron_utils import unwrap_model
+    from ......verl.utils.logger import print_rank_0
+    from ......verl.utils.megatron_utils import unwrap_model
 
     start_time = time.time()
 

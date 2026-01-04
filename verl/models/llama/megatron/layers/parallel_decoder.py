@@ -25,7 +25,7 @@ from megatron.core import ModelParallelConfig
 from torch import nn
 from transformers import LlamaConfig
 
-from verl.utils.megatron_utils import TransformerConfig, convert_config
+from ......verl.utils.megatron_utils import TransformerConfig, convert_config
 
 from .parallel_attention import ParallelLlamaAttention, ParallelLlamaAttentionRmPad
 from .parallel_mlp import ParallelLlamaMLP

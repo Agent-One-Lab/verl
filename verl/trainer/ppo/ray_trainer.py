@@ -17,8 +17,7 @@
 PPO Trainer with Ray-based single controller.
 This trainer supports model-agonistic model initialization with huggingface
 """
-import sys
-sys.path.append("..")
+import sysconfig
 import asyncio
 import logging
 import threading
@@ -41,30 +40,30 @@ from torch.utils.data import Dataset, Sampler
 from torchdata.stateful_dataloader import StatefulDataLoader
 from tqdm import tqdm
 
-from verl import DataProto
-from verl.experimental.dataset.sampler import AbstractCurriculumSampler
-from verl.protocol import pad_dataproto_to_divisor, unpad_dataproto
-from verl.single_controller.ray import RayClassWithInitArgs, RayResourcePool, RayWorkerGroup
-from verl.single_controller.ray.base import create_colocated_worker_cls
-from verl.trainer.config import AlgoConfig
-from verl.trainer.ppo import core_algos
-from verl.trainer.ppo.core_algos import AdvantageEstimator, agg_loss
-from verl.trainer.ppo.metric_utils import (
+from ....verl import DataProto
+from ....verl.experimental.dataset.sampler import AbstractCurriculumSampler
+from ....verl.protocol import pad_dataproto_to_divisor, unpad_dataproto
+from ....verl.single_controller.ray import RayClassWithInitArgs, RayResourcePool, RayWorkerGroup
+from ....verl.single_controller.ray.base import create_colocated_worker_cls
+from ....verl.trainer.config import AlgoConfig
+from ....verl.trainer.ppo import core_algos
+from ....verl.trainer.ppo.core_algos import AdvantageEstimator, agg_loss
+from ....verl.trainer.ppo.metric_utils import (
     compute_data_metrics,
     compute_throughout_metrics,
     compute_timing_metrics,
     process_validation_metrics,
 )
-from verl.trainer.ppo.reward import compute_reward, compute_reward_async
-from verl.trainer.ppo.utils import Role, WorkerType, need_critic, need_reference_policy, need_reward_model
-from verl.utils.checkpoint.checkpoint_manager import find_latest_ckpt_path, should_save_ckpt_esi
-from verl.utils.config import omega_conf_to_dataclass
-from verl.utils.debug import marked_timer
-from verl.utils.metric import reduce_metrics
-from verl.utils.rollout_skip import RolloutSkip
-from verl.utils.seqlen_balancing import calculate_workload, get_seqlen_balanced_partitions, log_seqlen_unbalance
-from verl.utils.torch_functional import masked_mean
-from verl.utils.tracking import ValidationGenerationsLogger
+from ....verl.trainer.ppo.reward import compute_reward, compute_reward_async
+from ....verl.trainer.ppo.utils import Role, WorkerType, need_critic, need_reference_policy, need_reward_model
+from ....verl.utils.checkpoint.checkpoint_manager import find_latest_ckpt_path, should_save_ckpt_esi
+from ....verl.utils.config import omega_conf_to_dataclass
+from ....verl.utils.debug import marked_timer
+from ....verl.utils.metric import reduce_metrics
+from ....verl.utils.rollout_skip import RolloutSkip
+from ....verl.utils.seqlen_balancing import calculate_workload, get_seqlen_balanced_partitions, log_seqlen_unbalance
+from ....verl.utils.torch_functional import masked_mean
+from ....verl.utils.tracking import ValidationGenerationsLogger
 
 @dataclass
 class ResourcePoolManager:
@@ -336,7 +335,7 @@ class RayPPOTrainer:
         Creates the train and validation dataloaders.
         """
         # TODO: we have to make sure the batch size is divisible by the dp size
-        from verl.trainer.main_ppo import create_rl_dataset, create_rl_sampler
+        from ....verl.trainer.main_ppo import create_rl_dataset, create_rl_sampler
 
         if train_dataset is None:
             train_dataset = create_rl_dataset(
@@ -359,7 +358,7 @@ class RayPPOTrainer:
         if train_sampler is None:
             train_sampler = create_rl_sampler(self.config.data, self.train_dataset)
         if collate_fn is None:
-            from verl.utils.dataset.rl_dataset import collate_fn as default_collate_fn
+            from ....verl.utils.dataset.rl_dataset import collate_fn as default_collate_fn
 
             collate_fn = default_collate_fn
 
@@ -770,7 +769,7 @@ class RayPPOTrainer:
         # create async rollout manager and request scheduler
         self.async_rollout_mode = False
         if self.config.actor_rollout_ref.rollout.mode == "async":
-            from verl.experimental.agent_loop import AgentLoopManager
+            from ....verl.experimental.agent_loop import AgentLoopManager
 
             self.async_rollout_mode = True
             if self.config.reward_model.enable and self.config.reward_model.enable_resource_pool:
@@ -800,7 +799,7 @@ class RayPPOTrainer:
         return future.result()
     
     def _save_checkpoint(self):
-        from verl.utils.fs import local_mkdir_safe
+        from ....verl.utils.fs import local_mkdir_safe
 
         # path: given_path + `/global_step_{global_steps}` + `/actor`
         local_global_step_folder = os.path.join(
@@ -984,7 +983,7 @@ class RayPPOTrainer:
         """
         from omegaconf import OmegaConf
 
-        from verl.utils.tracking import Tracking
+        from ....verl.utils.tracking import Tracking
 
         logger = Tracking(
             project_name=self.config.trainer.project_name,
@@ -1138,7 +1137,7 @@ class RayPPOTrainer:
                     rollout_corr_config = self.config.algorithm.get("rollout_correction", None)
                     bypass_recomputing_logprobs = rollout_corr_config and rollout_corr_config.get("bypass_mode", False)
                     if bypass_recomputing_logprobs:  # Use `rollout_log_probs`
-                        from verl.trainer.ppo.rollout_corr_helper import apply_rollout_correction
+                        from ....verl.trainer.ppo.rollout_corr_helper import apply_rollout_correction
 
                         apply_rollout_correction(
                             batch=batch,
@@ -1161,7 +1160,7 @@ class RayPPOTrainer:
                             batch = batch.union(old_log_prob)
                             if "rollout_log_probs" in batch.batch.keys():
                                 # TODO: we may want to add diff of probs too.
-                                from verl.utils.debug.metrics import calculate_debug_metrics
+                                from ....verl.utils.debug.metrics import calculate_debug_metrics
 
                                 metrics.update(calculate_debug_metrics(batch))
 
@@ -1209,7 +1208,7 @@ class RayPPOTrainer:
                             and "rollout_log_probs" in batch.batch
                             and not bypass_recomputing_logprobs  # Only in decoupled mode
                         ):
-                            from verl.trainer.ppo.rollout_corr_helper import compute_rollout_correction_and_add_to_batch
+                            from ....verl.trainer.ppo.rollout_corr_helper import compute_rollout_correction_and_add_to_batch
 
                             # Compute IS weights, apply rejection sampling, compute metrics
                             batch, is_metrics = compute_rollout_correction_and_add_to_batch(batch, rollout_corr_config)

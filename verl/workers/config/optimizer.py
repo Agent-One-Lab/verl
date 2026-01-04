@@ -17,7 +17,7 @@ from typing import Optional
 
 from omegaconf import MISSING
 
-from verl.base_config import BaseConfig
+from ....verl.base_config import BaseConfig
 
 __all__ = ["OptimizerConfig", "FSDPOptimizerConfig", "McoreOptimizerConfig", "build_optimizer"]
 

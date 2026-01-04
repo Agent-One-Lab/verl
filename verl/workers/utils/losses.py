@@ -17,11 +17,11 @@ import torch
 import torch.nn.functional as F
 from tensordict import TensorDict
 
-from verl.trainer.ppo.core_algos import agg_loss, compute_value_loss, get_policy_loss_fn, kl_penalty
-from verl.utils import tensordict_utils as tu
-from verl.utils.dataset.dataset_utils import DatasetPadMode
-from verl.utils.torch_functional import masked_mean, masked_sum
-from verl.workers.config import ActorConfig, CriticConfig
+from ....verl.trainer.ppo.core_algos import agg_loss, compute_value_loss, get_policy_loss_fn, kl_penalty
+from ....verl.utils import tensordict_utils as tu
+from ....verl.utils.dataset.dataset_utils import DatasetPadMode
+from ....verl.utils.torch_functional import masked_mean, masked_sum
+from ....verl.workers.config import ActorConfig, CriticConfig
 
 
 def sft_loss(config: ActorConfig, model_output, data: TensorDict, dp_group=None):

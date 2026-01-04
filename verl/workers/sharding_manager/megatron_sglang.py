@@ -27,17 +27,17 @@ from sglang.srt.weight_sync.utils import update_weights as sgl_update_weights
 from torch import nn
 from torch.distributed.device_mesh import DeviceMesh
 
-from verl.protocol import DataProto, all_gather_data_proto
-from verl.utils.device import get_torch_device, set_expandable_segments
-from verl.utils.import_utils import deprecated
-from verl.utils.megatron_utils import (
+from ....verl.protocol import DataProto, all_gather_data_proto
+from ....verl.utils.device import get_torch_device, set_expandable_segments
+from ....verl.utils.import_utils import deprecated
+from ....verl.utils.megatron_utils import (
     load_megatron_model_to_gpu,
     offload_megatron_model_to_cpu,
     per_tensor_generator,
 )
-from verl.utils.memory_utils import aggressive_empty_cache
-from verl.utils.profiler import GPUMemoryLogger, log_gpu_memory_usage, simple_timer
-from verl.workers.rollout.sglang_rollout.utils import get_named_tensor_buckets
+from ....verl.utils.memory_utils import aggressive_empty_cache
+from ....verl.utils.profiler import GPUMemoryLogger, log_gpu_memory_usage, simple_timer
+from ....verl.workers.rollout.sglang_rollout.utils import get_named_tensor_buckets
 
 from .base import BaseShardingManager
 

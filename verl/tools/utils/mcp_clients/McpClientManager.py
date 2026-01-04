@@ -20,7 +20,7 @@ from typing import Any
 from fastmcp import Client
 from fastmcp.client.transports import SSETransport
 
-from verl.tools.utils.mcp_clients.utils import TokenBucket, mcp2openai
+from .....verl.tools.utils.mcp_clients.utils import TokenBucket, mcp2openai
 
 logger = logging.getLogger(__name__)
 

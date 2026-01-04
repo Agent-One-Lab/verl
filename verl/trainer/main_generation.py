@@ -30,14 +30,14 @@ from pprint import pprint
 import pandas as pd
 from omegaconf import OmegaConf
 
-from verl import DataProto
-from verl.protocol import pad_dataproto_to_divisor, unpad_dataproto
-from verl.single_controller.ray import RayClassWithInitArgs, RayResourcePool, RayWorkerGroup
-from verl.utils import hf_tokenizer
-from verl.utils.fs import copy_to_local
-from verl.utils.hdfs_io import makedirs
-from verl.utils.model import compute_position_id_with_mask
-from verl.workers.fsdp_workers import ActorRolloutRefWorker
+from ...verl import DataProto
+from ...verl.protocol import pad_dataproto_to_divisor, unpad_dataproto
+from ...verl.single_controller.ray import RayClassWithInitArgs, RayResourcePool, RayWorkerGroup
+from ...verl.utils import hf_tokenizer
+from ...verl.utils.fs import copy_to_local
+from ...verl.utils.hdfs_io import makedirs
+from ...verl.utils.model import compute_position_id_with_mask
+from ...verl.workers.fsdp_workers import ActorRolloutRefWorker
 
 
 @hydra.main(config_path="config", config_name="generation", version_base=None)

@@ -16,7 +16,7 @@ import json
 from typing import Any, Optional
 from uuid import uuid4
 
-from verl.utils.rollout_trace import rollout_trace_op
+from ....verl.utils.rollout_trace import rollout_trace_op
 
 from .schemas import OpenAIFunctionToolSchema, ToolResponse
 

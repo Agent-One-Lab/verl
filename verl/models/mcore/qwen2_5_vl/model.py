@@ -27,7 +27,7 @@ from megatron.core.transformer import MegatronModule
 from megatron.core.transformer.spec_utils import ModuleSpec
 from megatron.core.transformer.transformer_config import TransformerConfig
 
-from verl.models.mcore.util import preprocess_packed_seqs
+from ....verl.models.mcore.util import preprocess_packed_seqs
 
 from .attention import Qwen2_5VLSelfAttention
 from .vision_model import Qwen2_5VisionModel

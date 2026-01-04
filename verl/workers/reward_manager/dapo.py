@@ -16,10 +16,10 @@ from collections import defaultdict
 
 import torch
 
-from verl import DataProto
-from verl.utils.reward_score import default_compute_score
-from verl.workers.reward_manager import register
-from verl.workers.reward_manager.abstract import AbstractRewardManager
+from ....verl import DataProto
+from ....verl.utils.reward_score import default_compute_score
+from ....verl.workers.reward_manager import register
+from ....verl.workers.reward_manager.abstract import AbstractRewardManager
 
 
 @register("dapo")

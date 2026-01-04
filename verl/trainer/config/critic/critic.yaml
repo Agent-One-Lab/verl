@@ -1,5 +1,5 @@
 # Required when using verl.utils.omega_conf_to_dataclass to instantiate dataclass configs
-_target_: verl.workers.config.CriticConfig
+_target_: agentfly.verl.workers.config.CriticConfig
 
 # Number of rollouts per update (mirrors actor rollout_n)
 rollout_n: ${oc.select:actor_rollout_ref.rollout.n,1}
@@ -83,7 +83,7 @@ loss_agg_mode: ${oc.select:actor_rollout_ref.actor.loss_agg_mode,token-mean}
 checkpoint:
 
   # Target dataclass for this configuration
-  _target_: verl.trainer.config.CheckpointConfig
+  _target_: agentfly.verl.trainer.config.CheckpointConfig
 
   # What to include in saved checkpoints
   # with 'hf_model' you can save whole model as hf format, now only use sharded model checkpoint to save space
@@ -99,7 +99,7 @@ checkpoint:
 profiler:
 
   # Required when using verl.utils.omega_conf_to_dataclass to instantiate dataclass configs
-  _target_: verl.utils.profiler.ProfilerConfig
+  _target_: agentfly.verl.utils.profiler.ProfilerConfig
 
   # profiler tool, default same as profiler.tool in global config
   # choices: nsys, npu, torch, torch_memory
@@ -124,7 +124,7 @@ profiler:
     nsys:
 
       # Required when using verl.utils.omega_conf_to_dataclass to instantiate dataclass configs
-      _target_: verl.utils.profiler.config.NsightToolConfig
+      _target_: agentfly.verl.utils.profiler.config.NsightToolConfig
     
       # True for each task has its own database, False for all tasks in one training step share one database.
       discrete: ${oc.select:global_profiler.global_tool_config.nsys.discrete}
@@ -133,7 +133,7 @@ profiler:
     npu:
 
       # Required when using verl.utils.omega_conf_to_dataclass to instantiate dataclass configs
-      _target_: verl.utils.profiler.config.NPUToolConfig
+      _target_: agentfly.verl.utils.profiler.config.NPUToolConfig
 
       # Contents to profile, can be empty
       # options: npu, cpu, memory, shapes, module, stack
@@ -152,7 +152,7 @@ profiler:
     torch:
 
       # Required when using verl.utils.omega_conf_to_dataclass to instantiate dataclass configs
-      _target_: verl.utils.profiler.config.TorchProfilerToolConfig
+      _target_: agentfly.verl.utils.profiler.config.TorchProfilerToolConfig
 
       # start profile mini-batch in training
       # NOTICE: different with global steps config which refers to iteration
@@ -166,7 +166,7 @@ profiler:
     torch_memory:
 
       # Required when using verl.utils.omega_conf_to_dataclass to instantiate dataclass configs
-      _target_: verl.utils.profiler.config.TorchMemoryToolConfig
+      _target_: agentfly.verl.utils.profiler.config.TorchMemoryToolConfig
 
       # Maximum number of memory allocation entries to track
       trace_alloc_max_entries: ${oc.select:global_profiler.global_tool_config.torch_memory.trace_alloc_max_entries,100000}

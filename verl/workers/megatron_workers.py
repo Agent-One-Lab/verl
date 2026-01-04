@@ -34,24 +34,24 @@ except ImportError:
 
 from megatron.core import parallel_state as mpu
 
-from verl import DataProto
-from verl.models.mcore import get_mcore_weight_converter
-from verl.single_controller.base import Worker
-from verl.single_controller.base.decorator import Dispatch, make_nd_compute_dataproto_dispatch_fn, register
-from verl.utils import hf_tokenizer
-from verl.utils.checkpoint.megatron_checkpoint_manager import MegatronCheckpointManager
-from verl.utils.config import omega_conf_to_dataclass
-from verl.utils.device import (
+from ...verl import DataProto
+from ...verl.models.mcore import get_mcore_weight_converter
+from ...verl.single_controller.base import Worker
+from ...verl.single_controller.base.decorator import Dispatch, make_nd_compute_dataproto_dispatch_fn, register
+from ...verl.utils import hf_tokenizer
+from ...verl.utils.checkpoint.megatron_checkpoint_manager import MegatronCheckpointManager
+from ...verl.utils.config import omega_conf_to_dataclass
+from ...verl.utils.device import (
     get_device_id,
     get_device_name,
     get_nccl_backend,
     get_torch_device,
     set_expandable_segments,
 )
-from verl.utils.distributed import set_numa_affinity
-from verl.utils.flops_counter import FlopsCounter
-from verl.utils.fs import copy_to_local
-from verl.utils.megatron_utils import (
+from ...verl.utils.distributed import set_numa_affinity
+from ...verl.utils.flops_counter import FlopsCounter
+from ...verl.utils.fs import copy_to_local
+from ...verl.utils.megatron_utils import (
     load_megatron_model_to_gpu,
     load_megatron_optimizer,
     offload_megatron_model_to_cpu,
@@ -59,9 +59,9 @@ from verl.utils.megatron_utils import (
     per_tensor_generator,
     register_megatron_training_hooks,
 )
-from verl.utils.memory_utils import aggressive_empty_cache
-from verl.utils.model import get_hf_model_path, load_mcore_dist_weights, load_megatron_gptmodel_weights
-from verl.utils.profiler import (
+from ...verl.utils.memory_utils import aggressive_empty_cache
+from ...verl.utils.model import get_hf_model_path, load_mcore_dist_weights, load_megatron_gptmodel_weights
+from ...verl.utils.profiler import (
     DistProfiler,
     DistProfilerExtension,
     GPUMemoryLogger,
@@ -69,13 +69,13 @@ from verl.utils.profiler import (
     log_gpu_memory_usage,
     simple_timer,
 )
-from verl.utils.profiler.performance import reduce_timing, topk_reduce_ratio_min_max
-from verl.utils.ray_utils import get_event_loop
-from verl.workers.actor.megatron_actor import MegatronPPOActor
-from verl.workers.config import HFModelConfig, McoreCriticConfig, RolloutConfig
-from verl.workers.critic.megatron_critic import MegatronPPOCritic
-from verl.workers.reward_model.megatron.reward_model import MegatronRewardModel
-from verl.workers.rollout import get_rollout_class
+from ...verl.utils.profiler.performance import reduce_timing, topk_reduce_ratio_min_max
+from ...verl.utils.ray_utils import get_event_loop
+from ...verl.workers.actor.megatron_actor import MegatronPPOActor
+from ...verl.workers.config import HFModelConfig, McoreCriticConfig, RolloutConfig
+from ...verl.workers.critic.megatron_critic import MegatronPPOCritic
+from ...verl.workers.reward_model.megatron.reward_model import MegatronRewardModel
+from ...verl.workers.rollout import get_rollout_class
 
 logger = logging.getLogger(__file__)
 logger.setLevel(os.getenv("VERL_LOGGING_LEVEL", "WARN"))
@@ -113,10 +113,10 @@ class MegatronWorker(Worker):
     ):
         from transformers import AutoConfig
 
-        from verl.models.mcore import hf_to_mcore_config
-        from verl.utils import hf_processor, hf_tokenizer
-        from verl.utils.fs import copy_to_local
-        from verl.utils.model import update_model_config
+        from ...verl.models.mcore import hf_to_mcore_config
+        from ...verl.utils import hf_processor, hf_tokenizer
+        from ...verl.utils.fs import copy_to_local
+        from ...verl.utils.model import update_model_config
 
         # Step 1: initialize the tokenizer
         self.local_path = copy_to_local(model_path)
@@ -152,7 +152,7 @@ class MegatronWorker(Worker):
         if self.rank == 0:
             print(f"Model config after override: {hf_config}")
 
-        from verl.models.mcore.config_converter import mapping_string_to_attn_backend
+        from ...verl.models.mcore.config_converter import mapping_string_to_attn_backend
 
         # todo: remove this line after mcore adopt mbridge 0.15, now for compatibility
         override_transformer_config = mapping_string_to_attn_backend(override_transformer_config)
@@ -165,7 +165,7 @@ class MegatronWorker(Worker):
         self.vanilla_bridge = megatron_config.get("vanilla_mbridge", True)
         if megatron_config.use_mbridge:
             if self.vanilla_bridge:
-                from verl.models.mcore.mbridge import AutoBridge
+                from ...verl.models.mcore.mbridge import AutoBridge
 
                 bridge = AutoBridge.from_config(hf_config, dtype=dtype)
                 bridge.set_extra_args(**override_transformer_config)
@@ -173,7 +173,7 @@ class MegatronWorker(Worker):
                 tf_config.fp16 = fp16
                 tf_config.bf16 = bf16
             else:
-                from verl.models.mcore.bridge import AutoBridge
+                from ...verl.models.mcore.bridge import AutoBridge
 
                 # Use Megatron-Bridge to convert HF config to Megatron config
                 bridge = AutoBridge.from_hf_pretrained(self.local_path, trust_remote_code=trust_remote_code)
@@ -219,7 +219,7 @@ class MegatronWorker(Worker):
         self.tf_config = tf_config
 
         # Get PEFT config from model.lora if specified
-        from verl.workers.config.megatron_peft import get_peft_cls
+        from ...verl.workers.config.megatron_peft import get_peft_cls
 
         self.peft_cls = get_peft_cls(
             model_config=self.config.model, bridge=self.bridge, provider=self.provider, dtype=dtype
@@ -345,13 +345,13 @@ class ActorRolloutRefWorker(MegatronWorker, DistProfilerExtension):
     def _build_model_optimizer(
         self, model_path, optim_config, override_model_config, override_transformer_config, override_ddp_config=None
     ):
-        from verl.utils.megatron.optimizer import (
+        from ...verl.utils.megatron.optimizer import (
             get_megatron_optimizer,
             get_megatron_optimizer_param_scheduler,
             init_megatron_optim_config,
         )
-        from verl.utils.megatron_utils import McoreModuleWrapperConfig, make_megatron_module
-        from verl.utils.model import get_generation_config, print_model_size
+        from ...verl.utils.megatron_utils import McoreModuleWrapperConfig, make_megatron_module
+        from ...verl.utils.model import get_generation_config, print_model_size
 
         self._init_hf_config_and_tf_config(
             model_path,
@@ -532,7 +532,7 @@ class ActorRolloutRefWorker(MegatronWorker, DistProfilerExtension):
 
             importlib.import_module(self.config.model.external_lib)
 
-        from verl.utils.torch_dtypes import PrecisionType
+        from ...verl.utils.torch_dtypes import PrecisionType
 
         override_model_config = OmegaConf.to_container(OmegaConf.create(self.config.model.get("override_config", {})))
         if self._is_actor:
@@ -728,7 +728,7 @@ class ActorRolloutRefWorker(MegatronWorker, DistProfilerExtension):
         metrics["perf/max_memory_allocated_gb"] = get_torch_device().max_memory_allocated() / (1024**3)
         metrics["perf/max_memory_reserved_gb"] = get_torch_device().max_memory_reserved() / (1024**3)
         metrics["perf/cpu_memory_used_gb"] = psutil.virtual_memory().used / (1024**3)
-        from verl.utils.megatron.optimizer import get_megatron_last_lr
+        from ...verl.utils.megatron.optimizer import get_megatron_last_lr
 
         metrics["actor/lr"] = get_megatron_last_lr(self.actor_optimizer)
         self.actor_optimizer_scheduler.step(1)
@@ -1014,13 +1014,13 @@ class CriticWorker(MegatronWorker, DistProfilerExtension):
     def _build_critic_model_optimizer(
         self, model_path, optim_config, override_model_config, override_transformer_config, override_ddp_config
     ):
-        from verl.utils.megatron.optimizer import (
+        from ...verl.utils.megatron.optimizer import (
             get_megatron_optimizer,
             get_megatron_optimizer_param_scheduler,
             init_megatron_optim_config,
         )
-        from verl.utils.megatron_utils import McoreModuleWrapperConfig, make_megatron_module
-        from verl.utils.model import print_model_size
+        from ...verl.utils.megatron_utils import McoreModuleWrapperConfig, make_megatron_module
+        from ...verl.utils.model import print_model_size
 
         self._init_hf_config_and_tf_config(
             model_path,
@@ -1098,7 +1098,7 @@ class CriticWorker(MegatronWorker, DistProfilerExtension):
     def init_model(self):
         # create critic
 
-        from verl.utils.torch_dtypes import PrecisionType
+        from ...verl.utils.torch_dtypes import PrecisionType
 
         if self.config.model.get("external_lib", None) is not None:
             # This is used to import external_lib into the huggingface systems
@@ -1198,7 +1198,7 @@ class CriticWorker(MegatronWorker, DistProfilerExtension):
         global_num_tokens = data.meta_info["global_token_num"]
         estimated_flops, promised_flops = self.flops_counter.estimate_flops(global_num_tokens, delta_time)
         metrics["perf/mfu/critic"] = estimated_flops * self.config.ppo_epochs / promised_flops / self.world_size
-        from verl.utils.megatron.optimizer import get_megatron_last_lr
+        from ...verl.utils.megatron.optimizer import get_megatron_last_lr
 
         metrics["critic/lr"] = get_megatron_last_lr(self.critic_optimizer)
         self.critic_optimizer_scheduler.step(1)
@@ -1302,7 +1302,7 @@ class RewardModelWorker(MegatronWorker, DistProfilerExtension):
             self.config.micro_batch_size_per_gpu = self.config.micro_batch_size
 
     def _build_rm_model(self, model_path, tokenizer, override_model_config, override_transformer_config):
-        from verl.utils.megatron_utils import McoreModuleWrapperConfig, make_megatron_module
+        from ...verl.utils.megatron_utils import McoreModuleWrapperConfig, make_megatron_module
 
         self._init_hf_config_and_tf_config(
             model_path,
@@ -1359,7 +1359,7 @@ class RewardModelWorker(MegatronWorker, DistProfilerExtension):
     def init_model(self):
         # create critic
 
-        from verl.utils.torch_dtypes import PrecisionType
+        from ...verl.utils.torch_dtypes import PrecisionType
 
         if self.config.model.get("external_lib", None) is not None:
             # This is used to import external_lib into the huggingface systems

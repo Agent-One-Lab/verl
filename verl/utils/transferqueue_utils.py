@@ -34,7 +34,7 @@ except ImportError:
         pass
 
 
-from verl.protocol import DataProto
+from ...verl.protocol import DataProto
 
 _TRANSFER_QUEUE_CLIENT = None
 

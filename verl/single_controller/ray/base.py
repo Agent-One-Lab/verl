@@ -23,10 +23,10 @@ from ray.experimental.state.api import get_actor
 from ray.util.placement_group import PlacementGroup, placement_group
 from ray.util.scheduling_strategies import NodeAffinitySchedulingStrategy, PlacementGroupSchedulingStrategy
 
-from verl.protocol import DataProto, _padding_size_key
-from verl.single_controller.base import ClassWithInitArgs, ResourcePool, Worker, WorkerGroup
-from verl.single_controller.base.decorator import MAGIC_ATTR, Dispatch
-from verl.utils.py_functional import temp_env_var
+from ....verl.protocol import DataProto, _padding_size_key
+from ....verl.single_controller.base import ClassWithInitArgs, ResourcePool, Worker, WorkerGroup
+from ....verl.single_controller.base.decorator import MAGIC_ATTR, Dispatch
+from ....verl.utils.py_functional import temp_env_var
 
 __all__ = ["Worker"]
 

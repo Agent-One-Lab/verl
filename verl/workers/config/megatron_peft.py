@@ -37,11 +37,11 @@ def get_peft_cls(model_config, bridge, provider, dtype=None):
 
     assert bridge is not None and provider is not None, "LoRA/PEFT only supported via Megatron-Bridge"
 
-    from verl.models.mcore.bridge import CanonicalLoRA, DoRA, LoRA, VLMLoRA
+    from ...verl.models.mcore.bridge import CanonicalLoRA, DoRA, LoRA, VLMLoRA
 
     lora_dtype = lora_cfg.get("dtype", dtype)
     if lora_dtype is not None:
-        from verl.utils.torch_dtypes import PrecisionType
+        from ...verl.utils.torch_dtypes import PrecisionType
 
         lora_dtype = PrecisionType.to_dtype(lora_dtype)
 

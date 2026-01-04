@@ -14,19 +14,22 @@
 """Utilities for distributed training."""
 
 import ctypes
+import ctypes.util
 import os
 from datetime import timedelta
 
 import ray
 import torch.distributed
 
-from verl.utils.device import get_device_name, get_nccl_backend, get_torch_device, is_npu_available
+from ...verl.utils.device import get_device_name, get_nccl_backend, get_torch_device, is_npu_available
+
+_HAS_LIBNUMA = ctypes.util.find_library("numa") is not None
 
 
 def set_numa_affinity():
     if is_npu_available:
-        # TODO (FightingZhen) libnuma.so is not available in e2e_ascend CI image, remove this code after image update.
-        return
+        if not _HAS_LIBNUMA:
+            return
 
     initialized = False
     try:

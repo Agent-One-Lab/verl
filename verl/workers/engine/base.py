@@ -20,7 +20,7 @@ from typing import Any, Callable, Generator, Optional
 import torch
 from tensordict import TensorDict
 
-from verl.utils.device import get_device_name
+from ....verl.utils.device import get_device_name
 
 
 class BaseEngine:

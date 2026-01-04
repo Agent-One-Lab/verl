@@ -20,7 +20,7 @@ from typing import Optional
 import torch
 from torch import nn
 
-from verl.utils.device import get_device_name
+from ...verl.utils.device import get_device_name
 
 
 class MemoryBuffer:

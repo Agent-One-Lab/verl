@@ -20,7 +20,7 @@ defaults:
   - _self_
 
 # Target class for this configuration
-_target_: verl.workers.config.FSDPActorConfig
+_target_: agentfly.verl.workers.config.FSDPActorConfig
 
 # TODO(haibin.lin): switch to fsdp2
 strategy: fsdp

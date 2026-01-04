@@ -28,7 +28,7 @@ from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LambdaLR
 from transformers import PreTrainedTokenizer
 
-from verl.utils.device import get_device_name, get_torch_device
+from ...verl.utils.device import get_device_name, get_torch_device
 
 try:
     from flash_attn.ops.triton.cross_entropy import cross_entropy_loss

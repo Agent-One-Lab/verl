@@ -35,11 +35,11 @@ from megatron.core.transformer.module import Float16Module
 from megatron.core.utils import get_attr_wrapped_model
 from transformers import PretrainedConfig
 
-import verl.utils.megatron.tensor_parallel as tp_utils
-from verl.utils.device import get_device_id, get_device_name, get_torch_device
-from verl.utils.fs import local_mkdir_safe
-from verl.utils.model import normalize_model_name
-from verl.utils.torch_dtypes import PrecisionType
+from ...verl.utils.megatron import tensor_parallel as tp_utils
+from ...verl.utils.device import get_device_id, get_device_name, get_torch_device
+from ...verl.utils.fs import local_mkdir_safe
+from ...verl.utils.model import normalize_model_name
+from ...verl.utils.torch_dtypes import PrecisionType
 
 
 def get_model_config(model):
@@ -186,11 +186,11 @@ def make_megatron_module(
 
     if bridge is not None:
         if provider is None:
-            from verl.models.mcore.mbridge import freeze_moe_router, make_value_model
+            from ...verl.models.mcore.mbridge import freeze_moe_router, make_value_model
 
             value_model_hook = make_value_model
         else:
-            from verl.models.mcore.bridge import freeze_moe_router, make_value_model
+            from ...verl.models.mcore.bridge import freeze_moe_router, make_value_model
 
             value_model_hook = make_value_model(hf_config.hidden_size, provider.sequence_parallel)
 
@@ -210,7 +210,7 @@ def make_megatron_module(
             # Register PEFT transformation as pre-wrap hook if peft_cls is specified
             # This must happen BEFORE DDP wrapping to avoid KeyError with frozen parameters
             if peft_cls is not None:
-                from verl.utils.megatron_peft_utils import load_adapter_checkpoint, print_adapter_info
+                from ...verl.utils.megatron_peft_utils import load_adapter_checkpoint, print_adapter_info
 
                 def peft_pre_wrap_hook(model):
                     """Pre-wrap hook that applies PEFT transformation."""
@@ -274,7 +274,7 @@ def make_megatron_module(
     else:
 
         def megatron_model_provider(pre_process, post_process, vp_stage=None):
-            from verl.models.mcore import init_mcore_model
+            from ...verl.models.mcore import init_mcore_model
 
             parallel_model = init_mcore_model(
                 tf_config,

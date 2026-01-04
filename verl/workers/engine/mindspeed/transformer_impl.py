@@ -17,8 +17,8 @@ import os
 
 from mindspeed.megatron_adaptor import repatch
 
-from verl.trainer.config import CheckpointConfig
-from verl.workers.config import HFModelConfig, McoreEngineConfig, McoreOptimizerConfig
+from .....verl.trainer.config import CheckpointConfig
+from .....verl.workers.config import HFModelConfig, McoreEngineConfig, McoreOptimizerConfig
 
 from ..base import EngineRegistry
 from ..megatron import MegatronEngineWithLMHead

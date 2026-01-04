@@ -31,8 +31,8 @@ from torch import nn
 from transformers import LlamaConfig
 from transformers.utils import is_flash_attn_2_available
 
-from verl.models.llama.megatron.layers.parallel_linear import QKVParallelLinear
-from verl.utils.megatron import tensor_parallel as tp_utils
+from ......verl.models.llama.megatron.layers.parallel_linear import QKVParallelLinear
+from ......verl.utils.megatron import tensor_parallel as tp_utils
 
 
 class LlamaRotaryEmbedding(nn.Module):

@@ -25,8 +25,8 @@ import torch.nn.functional as F
 from tensordict import TensorDict
 from torch import nn
 
-from verl import DataProto
-from verl.utils.torch_functional import logprobs_from_logits
+from .....verl import DataProto
+from .....verl.utils.torch_functional import logprobs_from_logits
 
 from ..base import BaseRollout
 

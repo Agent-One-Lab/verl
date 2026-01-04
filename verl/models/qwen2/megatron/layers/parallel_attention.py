@@ -36,8 +36,8 @@ from megatron.core import parallel_state as mpu
 from torch import nn
 from transformers import Qwen2Config
 
-from verl.models.qwen2.megatron.layers.parallel_linear import QKVParallelLinear
-from verl.utils.megatron import tensor_parallel as tp_utils
+from ....verl.models.qwen2.megatron.layers.parallel_linear import QKVParallelLinear
+from ....verl.utils.megatron import tensor_parallel as tp_utils
 
 
 class Qwen2RotaryEmbedding(nn.Module):

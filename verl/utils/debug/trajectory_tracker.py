@@ -25,7 +25,7 @@ from collections import deque
 import ray
 import torch
 
-from verl.utils.hdfs_io import copy, makedirs
+from ....verl.utils.hdfs_io import copy, makedirs
 
 remote_copy = ray.remote(copy)
 

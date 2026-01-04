@@ -17,8 +17,8 @@ from typing import Optional
 
 from omegaconf import MISSING
 
-from verl.base_config import BaseConfig
-from verl.utils.profiler import ProfilerConfig
+from ....verl.base_config import BaseConfig
+from ....verl.utils.profiler import ProfilerConfig
 
 __all__ = [
     "SamplingConfig",

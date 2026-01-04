@@ -42,25 +42,25 @@ try:
 except ImportError:
     from torch.distributed._tensor import DTensor
 
-import verl.utils.torch_functional as verl_F
-from verl import DataProto
-from verl.models.transformers.monkey_patch import apply_monkey_patch
-from verl.single_controller.base import Worker
-from verl.single_controller.base.decorator import Dispatch, make_nd_compute_dataproto_dispatch_fn, register
-from verl.utils import hf_processor, hf_tokenizer
-from verl.utils.activation_offload import enable_activation_offloading
-from verl.utils.checkpoint.fsdp_checkpoint_manager import FSDPCheckpointManager
-from verl.utils.config import omega_conf_to_dataclass
-from verl.utils.device import (
+from ...verl.utils import torch_functional as verl_F
+from ...verl import DataProto
+from ...verl.models.transformers.monkey_patch import apply_monkey_patch
+from ...verl.single_controller.base import Worker
+from ...verl.single_controller.base.decorator import Dispatch, make_nd_compute_dataproto_dispatch_fn, register
+from ...verl.utils import hf_processor, hf_tokenizer
+from ...verl.utils.activation_offload import enable_activation_offloading
+from ...verl.utils.checkpoint.fsdp_checkpoint_manager import FSDPCheckpointManager
+from ...verl.utils.config import omega_conf_to_dataclass
+from ...verl.utils.device import (
     get_device_id,
     get_device_name,
     get_nccl_backend,
     get_torch_device,
     set_expandable_segments,
 )
-from verl.utils.flops_counter import FlopsCounter
-from verl.utils.fs import copy_to_local
-from verl.utils.fsdp_utils import (
+from ...verl.utils.flops_counter import FlopsCounter
+from ...verl.utils.fs import copy_to_local
+from ...verl.utils.fsdp_utils import (
     CPUOffloadPolicy,
     MixedPrecisionPolicy,
     apply_fsdp2,
@@ -78,17 +78,17 @@ from verl.utils.fsdp_utils import (
     offload_fsdp_optimizer,
     replace_lora_wrapper,
 )
-from verl.utils.import_utils import import_external_libs
-from verl.utils.memory_utils import aggressive_empty_cache
-from verl.utils.model import compute_position_id_with_mask, convert_weight_keys
-from verl.utils.profiler import DistProfiler, DistProfilerExtension, ProfilerConfig, log_gpu_memory_usage, simple_timer
-from verl.utils.profiler.performance import reduce_timing, topk_reduce_ratio_min_max
-from verl.utils.py_functional import convert_to_regular_types
-from verl.utils.ray_utils import get_event_loop
-from verl.workers.config import FSDPCriticConfig, FSDPEngineConfig, HFModelConfig, RolloutConfig
-from verl.workers.config.optimizer import build_optimizer
-from verl.workers.rollout import get_rollout_class
-from verl.workers.sharding_manager.fsdp_ulysses import FSDPUlyssesShardingManager
+from ...verl.utils.import_utils import import_external_libs
+from ...verl.utils.memory_utils import aggressive_empty_cache
+from ...verl.utils.model import compute_position_id_with_mask, convert_weight_keys
+from ...verl.utils.profiler import DistProfiler, DistProfilerExtension, ProfilerConfig, log_gpu_memory_usage, simple_timer
+from ...verl.utils.profiler.performance import reduce_timing, topk_reduce_ratio_min_max
+from ...verl.utils.py_functional import convert_to_regular_types
+from ...verl.utils.ray_utils import get_event_loop
+from ...verl.workers.config import FSDPCriticConfig, FSDPEngineConfig, HFModelConfig, RolloutConfig
+from ...verl.workers.config.optimizer import build_optimizer
+from ...verl.workers.rollout import get_rollout_class
+from ...verl.workers.sharding_manager.fsdp_ulysses import FSDPUlyssesShardingManager
 
 logger = logging.getLogger(__file__)
 logger.setLevel(os.getenv("VERL_LOGGING_LEVEL", "WARN"))
@@ -289,8 +289,8 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
             AutoModelForVision2Seq,
         )
 
-        from verl.utils.model import get_generation_config, print_model_size, update_model_config
-        from verl.utils.torch_dtypes import PrecisionType
+        from ...verl.utils.model import get_generation_config, print_model_size, update_model_config
+        from ...verl.utils.torch_dtypes import PrecisionType
 
         assert role in ["actor", "ref"]
 
@@ -539,7 +539,7 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
 
         # TODO: add more optimizer args into config
         if role == "actor" and optim_config is not None:
-            from verl.utils.torch_functional import get_constant_schedule_with_warmup, get_cosine_schedule_with_warmup
+            from ...verl.utils.torch_functional import get_constant_schedule_with_warmup, get_cosine_schedule_with_warmup
 
             actor_optimizer = build_optimizer(actor_module_fsdp.parameters(), optim_config)
 
@@ -752,7 +752,7 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
 
     @register(dispatch_mode=Dispatch.ONE_TO_ALL)
     def init_model(self):
-        from verl.workers.actor import DataParallelPPOActor
+        from ...verl.workers.actor import DataParallelPPOActor
 
         # This is used to import external_lib into the huggingface systems
         import_external_libs(self.config.model.get("external_lib", None))
@@ -1033,7 +1033,7 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
 
     @register(dispatch_mode=Dispatch.ONE_TO_ALL)
     def save_checkpoint(self, local_path, hdfs_path=None, global_step=0, max_ckpt_to_keep=None):
-        from verl.utils.logger import log_with_rank
+        from ...verl.utils.logger import log_with_rank
 
         # only support save and load ckpt for actor
         assert self._is_actor
@@ -1220,8 +1220,8 @@ class CriticWorker(Worker, DistProfilerExtension):
         # the following line is necessary
         from torch.distributed.fsdp import MixedPrecision
 
-        from verl.utils.model import load_valuehead_model, print_model_size
-        from verl.utils.torch_dtypes import PrecisionType
+        from ...verl.utils.model import load_valuehead_model, print_model_size
+        from ...verl.utils.torch_dtypes import PrecisionType
 
         use_shm = config.model.get("use_shm", False)
         local_path = copy_to_local(config.model.path, use_shm=use_shm)
@@ -1431,7 +1431,7 @@ class CriticWorker(Worker, DistProfilerExtension):
         if self.rank == 0:
             print(f"Total steps: {total_steps}, num_warmup_steps: {num_warmup_steps}")
 
-        from verl.utils.torch_functional import get_constant_schedule_with_warmup, get_cosine_schedule_with_warmup
+        from ...verl.utils.torch_functional import get_constant_schedule_with_warmup, get_cosine_schedule_with_warmup
 
         if lr_scheduler_type == "constant":
             critic_lr_scheduler = get_constant_schedule_with_warmup(
@@ -1457,7 +1457,7 @@ class CriticWorker(Worker, DistProfilerExtension):
         # This is used to import external_lib into the huggingface systems
         import_external_libs(self.config.model.get("external_lib", None))
 
-        from verl.workers.critic import DataParallelPPOCritic
+        from ...verl.workers.critic import DataParallelPPOCritic
 
         self.critic_module, self.critic_optimizer, self.critic_lr_scheduler = self._build_critic_model_optimizer(
             self.config
@@ -1723,8 +1723,8 @@ class RewardModelWorker(Worker, DistProfilerExtension):
         self.reward_module = self._build_model(config=self.config)
 
     def _forward_micro_batch(self, micro_batch):
-        from verl.utils.attention_utils import index_first_axis, pad_input, rearrange, unpad_input
-        from verl.utils.ulysses import gather_outputs_and_unpad, ulysses_pad_and_slice_inputs
+        from ...verl.utils.attention_utils import index_first_axis, pad_input, rearrange, unpad_input
+        from ...verl.utils.ulysses import gather_outputs_and_unpad, ulysses_pad_and_slice_inputs
 
         with torch.no_grad(), torch.autocast(device_type=device_name, dtype=torch.bfloat16):
             input_ids = micro_batch["input_ids"]
@@ -1872,7 +1872,7 @@ class RewardModelWorker(Worker, DistProfilerExtension):
     def compute_rm_score(self, data: DataProto):
         import itertools
 
-        from verl.utils.seqlen_balancing import get_reverse_idx, rearrange_micro_batches
+        from ...verl.utils.seqlen_balancing import get_reverse_idx, rearrange_micro_batches
 
         # Support all hardwares
         data = data.to(get_device_id())

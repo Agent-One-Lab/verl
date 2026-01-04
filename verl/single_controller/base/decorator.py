@@ -18,10 +18,10 @@ from types import FunctionType
 
 from tensordict import TensorDict
 
-from verl.protocol import DataProtoFuture, _padding_size_key
-from verl.utils.py_functional import DynamicEnum
-from verl.utils.tensordict_utils import concat_tensordict
-from verl.utils.transferqueue_utils import BatchMeta
+from ....verl.protocol import DataProtoFuture, _padding_size_key
+from ....verl.utils.py_functional import DynamicEnum
+from ....verl.utils.tensordict_utils import concat_tensordict
+from ....verl.utils.transferqueue_utils import BatchMeta
 
 # here we add a magic number of avoid user-defined function already have this attribute
 MAGIC_ATTR = "attrs_3141562937"
@@ -73,7 +73,7 @@ init_predefined_execute_mode()
 
 
 def _split_args_kwargs_data_proto(chunks, *args, **kwargs):
-    from verl.protocol import DataProto, DataProtoFuture
+    from ....verl.protocol import DataProto, DataProtoFuture
 
     splitted_args = []
     for arg in args:
@@ -93,7 +93,7 @@ def _split_args_kwargs_data_proto(chunks, *args, **kwargs):
 
 
 def _split_args_kwargs_data_proto_with_auto_padding(chunks, *args, **kwargs):
-    from verl.protocol import DataProto, DataProtoFuture
+    from ....verl.protocol import DataProto, DataProtoFuture
 
     data_proto_len = None
     padding_size = None
@@ -142,7 +142,7 @@ def collect_all_to_all(worker_group, output):
 def _concat_data_proto_or_future(output: list):
     import ray
 
-    from verl.protocol import DataProto, DataProtoFuture
+    from ....verl.protocol import DataProto, DataProtoFuture
 
     # make sure all the elements in output has the same type
     for o in output:
@@ -163,7 +163,7 @@ def _concat_data_proto_or_future(output: list):
 
 
 def dispatch_dp_compute(worker_group, *args, **kwargs):
-    from verl.single_controller.base.worker_group import WorkerGroup
+    from ....verl.single_controller.base.worker_group import WorkerGroup
 
     assert isinstance(worker_group, WorkerGroup)
     for arg in args:
@@ -174,7 +174,7 @@ def dispatch_dp_compute(worker_group, *args, **kwargs):
 
 
 def collect_dp_compute(worker_group, output):
-    from verl.single_controller.base.worker_group import WorkerGroup
+    from ....verl.single_controller.base.worker_group import WorkerGroup
 
     assert isinstance(worker_group, WorkerGroup)
     assert len(output) == worker_group.world_size
@@ -182,7 +182,7 @@ def collect_dp_compute(worker_group, output):
 
 
 def dispatch_dp_compute_data_proto(worker_group, *args, **kwargs):
-    from verl.single_controller.base.worker_group import WorkerGroup
+    from ....verl.single_controller.base.worker_group import WorkerGroup
 
     assert isinstance(worker_group, WorkerGroup)
     # Note: enable auto padding for dp compute DatapProto
@@ -195,7 +195,7 @@ def dispatch_dp_compute_data_proto(worker_group, *args, **kwargs):
 
 
 def dispatch_dp_compute_data_proto_with_func(worker_group, *args, **kwargs):
-    from verl.single_controller.base.worker_group import WorkerGroup
+    from ....verl.single_controller.base.worker_group import WorkerGroup
 
     assert isinstance(worker_group, WorkerGroup)
     assert isinstance(args[0], FunctionType)  # NOTE: The first one args is a function!
@@ -208,7 +208,7 @@ def dispatch_dp_compute_data_proto_with_func(worker_group, *args, **kwargs):
 def collect_dp_compute_data_proto(worker_group, output):
     import ray
 
-    from verl.protocol import DataProto
+    from ....verl.protocol import DataProto
 
     for o in output:
         assert isinstance(o, DataProto | ray.ObjectRef), f"expecting {o} to be DataProto, but got {type(o)}"
@@ -220,8 +220,8 @@ def collect_dp_compute_data_proto(worker_group, output):
 def dispatch_nd_compute(dp_rank_mapping: list[int], dp_size, worker_group, *args, **kwargs):
     import os
 
-    from verl.single_controller.base.worker_group import WorkerGroup
-    from verl.utils.ray_utils import parallel_put
+    from ....verl.single_controller.base.worker_group import WorkerGroup
+    from ....verl.utils.ray_utils import parallel_put
 
     assert isinstance(worker_group, WorkerGroup)
 
@@ -252,7 +252,7 @@ def dispatch_nd_compute(dp_rank_mapping: list[int], dp_size, worker_group, *args
 
 
 def collect_nd_compute(collect_mask: list[bool], worker_group, output):
-    from verl.single_controller.base.worker_group import WorkerGroup
+    from ....verl.single_controller.base.worker_group import WorkerGroup
 
     assert isinstance(worker_group, WorkerGroup)
     assert len(output) == worker_group.world_size
@@ -274,7 +274,7 @@ def collect_nd_compute_dataproto(collect_mask: list[bool], worker_group, output)
     output = collect_nd_compute(collect_mask, worker_group, output)
     import ray
 
-    from verl.protocol import DataProto
+    from ....verl.protocol import DataProto
 
     for o in output:
         assert isinstance(o, DataProto | ray.ObjectRef | BatchMeta | TensorDict), (
@@ -284,7 +284,7 @@ def collect_nd_compute_dataproto(collect_mask: list[bool], worker_group, output)
 
 
 def dispatch_lazy_compute_data_proto(mesh_name, worker_group, *args, **kwargs):
-    from verl.single_controller.base.worker_group import WorkerGroup
+    from ....verl.single_controller.base.worker_group import WorkerGroup
 
     assert isinstance(worker_group, WorkerGroup)
 
@@ -300,7 +300,7 @@ def dispatch_lazy_compute_data_proto(mesh_name, worker_group, *args, **kwargs):
 
 
 def collect_lazy_compute_data_proto(mesh_name, worker_group, *args, **kwargs):
-    from verl.single_controller.base.worker_group import WorkerGroup
+    from ....verl.single_controller.base.worker_group import WorkerGroup
 
     assert isinstance(worker_group, WorkerGroup)
 
@@ -436,7 +436,7 @@ def register(dispatch_mode=Dispatch.ALL_TO_ALL, execute_mode=Execute.ALL, blocki
         A decorator that wraps the original function with distributed execution
         configuration.
     """
-    from verl.utils.transferqueue_utils import tqbridge
+    from ....verl.utils.transferqueue_utils import tqbridge
 
     _check_dispatch_mode(dispatch_mode=dispatch_mode)
     _check_execute_mode(execute_mode=execute_mode)

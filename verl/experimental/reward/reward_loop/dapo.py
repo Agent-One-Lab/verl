@@ -14,10 +14,10 @@
 
 import inspect
 
-from verl import DataProto
-from verl.experimental.reward.reward_loop import register
-from verl.experimental.reward.reward_loop.base import RewardLoopManagerBase
-from verl.utils.reward_score import default_compute_score
+from .....verl import DataProto
+from .....verl.experimental.reward.reward_loop import register
+from .....verl.experimental.reward.reward_loop.base import RewardLoopManagerBase
+from .....verl.utils.reward_score import default_compute_score
 
 
 @register("dapo")

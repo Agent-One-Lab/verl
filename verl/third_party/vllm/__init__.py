@@ -16,8 +16,8 @@ from importlib.metadata import PackageNotFoundError, version
 
 from packaging import version as vs
 
-from verl.utils.device import is_npu_available
-from verl.utils.import_utils import is_sglang_available
+from ....verl.utils.device import is_npu_available
+from ....verl.utils.import_utils import is_sglang_available
 
 
 def get_version(pkg):

@@ -19,7 +19,7 @@ import os
 import ray
 import yaml
 
-from verl.workers.config.rollout import PrometheusConfig
+from ....verl.workers.config.rollout import PrometheusConfig
 
 logger = logging.getLogger(__file__)
 logger.setLevel(os.getenv("VERL_LOGGING_LEVEL", "WARN"))

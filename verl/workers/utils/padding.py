@@ -15,8 +15,8 @@
 import torch
 from tensordict import TensorDict
 
-from verl.utils import tensordict_utils as tu
-from verl.utils.device import (
+from ....verl.utils import tensordict_utils as tu
+from ....verl.utils.device import (
     is_cuda_available,
     is_npu_available,
 )

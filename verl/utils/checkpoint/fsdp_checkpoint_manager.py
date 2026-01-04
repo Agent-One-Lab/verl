@@ -28,10 +28,10 @@ from torch.distributed.fsdp import ShardedOptimStateDictConfig, ShardedStateDict
 from transformers import GenerationConfig, PreTrainedTokenizer, ProcessorMixin
 from transformers.dynamic_module_utils import custom_object_save
 
-from verl.utils.device import is_cuda_available
-from verl.utils.fs import copy_to_local, is_non_local, local_mkdir_safe
-from verl.utils.fsdp_utils import fsdp_version, get_fsdp_full_state_dict, get_fsdp_state_ctx
-from verl.utils.logger import log_with_rank
+from ....verl.utils.device import is_cuda_available
+from ....verl.utils.fs import copy_to_local, is_non_local, local_mkdir_safe
+from ....verl.utils.fsdp_utils import fsdp_version, get_fsdp_full_state_dict, get_fsdp_state_ctx
+from ....verl.utils.logger import log_with_rank
 
 from .checkpoint_manager import BaseCheckpointManager
 

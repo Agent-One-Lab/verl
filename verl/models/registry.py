@@ -54,7 +54,7 @@ class ModelRegistry:
         elif value:  # critic/rm
             model_cls_name = model_cls_name[1]
 
-        module = importlib.import_module(f"verl.models.{module_name}.{megatron}.modeling_{module_name}_megatron")
+        module = importlib.import_module(f"agentfly.verl.models.{module_name}.{megatron}.modeling_{module_name}_megatron")
         return getattr(module, model_cls_name, None)
 
     @staticmethod

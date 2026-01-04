@@ -14,7 +14,7 @@ defaults:
   - _self_
 
 # Required when using verl.utils.omega_conf_to_dataclass to instantiate dataclass configs
-_target_: verl.workers.config.McoreCriticConfig
+_target_: agentfly.verl.workers.config.McoreCriticConfig
 
 strategy: megatron
 
@@ -25,7 +25,7 @@ nccl_timeout: 600
 model:
 
   # Required when using verl.utils.omega_conf_to_dataclass to instantiate dataclass configs
-  _target_: verl.trainer.config.BaseModelConfig
+  _target_: agentfly.verl.trainer.config.BaseModelConfig
 
   # override default empty mapping
   override_config:

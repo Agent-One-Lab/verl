@@ -34,8 +34,8 @@ from omegaconf import DictConfig, ListConfig
 from torch.utils.data import Dataset
 from transformers import PreTrainedTokenizer, ProcessorMixin
 import pandas as pd
-import verl.utils.torch_functional as verl_F
-from verl.utils.model import compute_position_id_with_mask
+from ....verl.utils import torch_functional as verl_F
+from ....verl.utils.model import compute_position_id_with_mask
 from PIL import Image
 import math
 logger = logging.getLogger(__name__)
@@ -228,7 +228,7 @@ class RLHFDataset(Dataset):
         self.tool_schemas = None
         if self.tool_config_path:
             try:
-                from verl.tools.utils.tool_registry import initialize_tools_from_config
+                from ....verl.tools.utils.tool_registry import initialize_tools_from_config
 
                 tool_list = initialize_tools_from_config(self.tool_config_path)
                 # match ToolAgentLoop behaviour: model_dump to plain dicts
@@ -254,7 +254,7 @@ class RLHFDataset(Dataset):
         self._read_files_and_tokenize()
 
     def _download(self, use_origin_parquet=False):
-        from verl.utils.fs import copy_to_local
+        from ....verl.utils.fs import copy_to_local
 
         data_files = self.data_files if not use_origin_parquet else self.original_data_files
         for i, parquet_file in enumerate(data_files):
@@ -293,7 +293,7 @@ class RLHFDataset(Dataset):
             video_key = self.video_key
 
             if processor is not None:
-                from verl.utils.dataset.vision_utils import process_image, process_video
+                from ....verl.utils.dataset.vision_utils import process_image, process_video
 
                 def doc2len(doc) -> int:
                     try:
@@ -407,7 +407,7 @@ class RLHFDataset(Dataset):
         model_inputs = {}
 
         if self.processor is not None:
-            from verl.utils.dataset.vision_utils import process_image, process_video
+            from ....verl.utils.dataset.vision_utils import process_image, process_video
 
             raw_prompt = self.processor.apply_chat_template(
                 messages, add_generation_prompt=True, tokenize=False, **self.apply_chat_template_kwargs
@@ -490,9 +490,9 @@ class RLHFDataset(Dataset):
         if self.processor is not None and "Qwen2VLImageProcessor" in self.processor.image_processor.__class__.__name__:
             # qwen-vl mrope
             if "Qwen3VLProcessor" in self.processor.__class__.__name__:
-                from verl.models.transformers.qwen3_vl import get_rope_index
+                from ....verl.models.transformers.qwen3_vl import get_rope_index
             else:
-                from verl.models.transformers.qwen2_vl import get_rope_index
+                from ....verl.models.transformers.qwen2_vl import get_rope_index
 
             vision_position_ids = get_rope_index(
                 self.processor,
@@ -507,7 +507,7 @@ class RLHFDataset(Dataset):
             text_position_ids[0, valid_mask] = torch.arange(valid_mask.sum().item())
             position_ids = [torch.cat((text_position_ids, vision_position_ids), dim=0)]  # (1, 4, seq_length)
         elif self.processor is not None and "Glm4vImageProcessor" in self.processor.image_processor.__class__.__name__:
-            from verl.models.transformers.glm4v import get_rope_index
+            from ....verl.models.transformers.glm4v import get_rope_index
 
             vision_position_ids = get_rope_index(
                 self.processor,
@@ -687,7 +687,7 @@ class RLHFAgentDataset(Dataset):
             raise ValueError(f"question not found in row_dict: {row_dict}")
         
         if "image" in row_dict:
-            from verl.utils.dataset.vision_utils import process_image
+            from ...verl.utils.dataset.vision_utils import process_image
             # image = process_image(row_dict["image"])
             image = row_dict["image"]
             image = self._process_image(image)

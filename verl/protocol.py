@@ -35,9 +35,9 @@ from packaging.version import parse as parse_version
 from tensordict import TensorDict
 from torch.utils.data import DataLoader
 
-from verl.utils.device import get_device_id, get_torch_device
-from verl.utils.py_functional import union_two_dict
-from verl.utils.torch_functional import allgather_dict_tensors
+from ..verl.utils.device import get_device_id, get_torch_device
+from ..verl.utils.py_functional import union_two_dict
+from ..verl.utils.torch_functional import allgather_dict_tensors
 
 __all__ = ["DataProto", "union_tensor_dict"]
 
@@ -1120,7 +1120,7 @@ class DataProto:
 
         from tensordict.tensorclass import NonTensorData, NonTensorStack
 
-        from verl.utils import tensordict_utils as tu
+        from ..verl.utils import tensordict_utils as tu
 
         common_keys = set(tensor_batch.keys()) & set(non_tensor_batch.keys())
         assert len(common_keys) == 0, f"tensor_batch and non_tensor_batch have common keys {common_keys}"

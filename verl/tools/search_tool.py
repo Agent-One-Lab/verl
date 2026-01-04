@@ -25,8 +25,8 @@ from uuid import uuid4
 import ray
 import ray.actor
 
-from verl.tools.utils.search_r1_like_utils import perform_single_search_batch
-from verl.utils.rollout_trace import rollout_trace_op
+from ...verl.tools.utils.search_r1_like_utils import perform_single_search_batch
+from ...verl.utils.rollout_trace import rollout_trace_op
 
 from .base_tool import BaseTool
 from .schemas import OpenAIFunctionToolSchema, ToolResponse

@@ -26,8 +26,8 @@ import ray
 from omegaconf import OmegaConf
 from tqdm import tqdm
 
-from verl.trainer.ppo.reward import get_custom_reward_fn
-from verl.utils.fs import copy_to_local
+from ...verl.trainer.ppo.reward import get_custom_reward_fn
+from ...verl.utils.fs import copy_to_local
 
 
 @ray.remote

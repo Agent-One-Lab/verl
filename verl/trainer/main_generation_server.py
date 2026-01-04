@@ -33,8 +33,8 @@ import pandas as pd
 from omegaconf import OmegaConf
 from openai.types.chat import ChatCompletion
 
-from verl.utils.hdfs_io import makedirs
-from verl.workers.rollout.replica import get_rollout_replica_class
+from ...verl.utils.hdfs_io import makedirs
+from ...verl.workers.rollout.replica import get_rollout_replica_class
 
 
 async def start_server(config):

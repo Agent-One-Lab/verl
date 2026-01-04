@@ -16,10 +16,10 @@
 import torch
 from tensordict import TensorDict
 
-from verl.utils import tensordict_utils as tu
-from verl.utils.dataset.dataset_utils import DatasetPadMode
-from verl.utils.py_functional import append_to_dict
-from verl.utils.seqlen_balancing import rearrange_micro_batches, restore_dynamic_batch
+from ....verl.utils import tensordict_utils as tu
+from ....verl.utils.dataset.dataset_utils import DatasetPadMode
+from ....verl.utils.py_functional import append_to_dict
+from ....verl.utils.seqlen_balancing import rearrange_micro_batches, restore_dynamic_batch
 
 
 def prepare_micro_batches(
