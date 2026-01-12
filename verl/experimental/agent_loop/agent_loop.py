@@ -333,12 +333,17 @@ class AgentLoopWorkerBase:
             response_mask: | 1, 1, 1, ..., 1, 1 | 0, 0, .., 0, 0 | 1, 1, 1, ..., 1, 1 | 0, 0, ..., 0|
         """
         config = self.config.actor_rollout_ref.rollout
+        generation_config = batch.meta_info.get("generation_config", {})
+
         sampling_params = dict(
-            temperature=config.temperature,
-            top_p=config.top_p,
+            temperature=generation_config.get("temperature", config.temperature),
+            top_p=generation_config.get("top_p", config.top_p),
+            max_tokens=generation_config.get("max_tokens", config.max_tokens),
             repetition_penalty=1.0,
             logprobs=config.calculate_log_probs,
         )
+        logger.debug(f"[AgentLoopWorker] generation_config: {generation_config}")
+        logger.debug(f"[AgentLoopWorker] sampling_params: {sampling_params}")
 
         # override sampling params for validation
         if batch.meta_info.get("validate", False):

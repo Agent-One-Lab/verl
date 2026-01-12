@@ -66,6 +66,7 @@ class SingleTurnAgentLoop(AgentLoopBase):
             )
             logger.debug(f"[SingleTurnAgentLoop] Prompt: {self.tokenizer.decode(prompt_ids)}")
 
+        logger.debug(f"[SingleTurnAgentLoop] Sampling params: {sampling_params}")
         with simple_timer("generate_sequences", metrics):
             output = await self.server_manager.generate(
                 request_id=request_id, prompt_ids=prompt_ids, sampling_params=sampling_params, image_data=image_data

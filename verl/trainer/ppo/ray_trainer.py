@@ -290,7 +290,7 @@ class RayPPOTrainer:
         # Before starting the training, clear all enroot containers
         clear_enroot_containers()
         print(f"Config.Agent: {config.agent}")
-        self.agent_wrapper = AutoAgent.from_config(config.agent.init_args)
+        self.agent_wrapper = AutoAgent.from_config(config.agent.init_config)
         # set jinja template for vllm rollout
         self.config.actor_rollout_ref.rollout.chat_template = self.agent_wrapper.jinja_template
         self.tokenizer.chat_template = self.agent_wrapper.jinja_template
@@ -580,7 +580,7 @@ class RayPPOTrainer:
             else:
                 # test_output_gen_batch_padded = self.async_rollout_manager.generate_sequences(test_gen_batch_padded)
                 self.agent_wrapper.set_llm_engine(self.async_rollout_manager, self.tokenizer, self.processor)
-                self.run_on_bg(self.agent_wrapper.run(max_turns=self.config.agent.max_turns, messages=test_gen_batch_padded.non_tensor_batch["messages"], num_chains=1))
+                self.run_on_bg(self.agent_wrapper.run(max_turns=self.config.agent.max_turns, messages=test_gen_batch_padded.non_tensor_batch["messages"], num_chains=1, generation_config=self.config.agent.generation_config))
                 test_output_gen_batch_padded = self.agent_wrapper.get_verl_data_proto()
 
             # unpad
@@ -1065,7 +1065,7 @@ class RayPPOTrainer:
                         else:
                             # gen_batch_output = self.async_rollout_manager.generate_sequences(gen_batch_output)
                             self.agent_wrapper.set_llm_engine(self.async_rollout_manager, self.tokenizer, self.processor)
-                            self.run_on_bg(self.agent_wrapper.run(max_turns=self.config.agent.max_turns, messages=gen_batch.non_tensor_batch["messages"], num_chains=self.config.agent.num_chains))
+                            self.run_on_bg(self.agent_wrapper.run(max_turns=self.config.agent.max_turns, messages=gen_batch.non_tensor_batch["messages"], num_chains=self.config.agent.num_chains, generation_config=self.config.agent.generation_config))
                             gen_batch_output = self.agent_wrapper.get_verl_data_proto()
 
                         # timing_raw.update(gen_batch_output.meta_info["timing"])

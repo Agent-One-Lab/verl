@@ -102,7 +102,7 @@ class DataParallelPPOActor(BasePPOActor):
         # response_length = micro_batch["responses"].size(-1)
         multi_modal_inputs = {}
         if "multi_modal_inputs" in micro_batch.keys():
-            from ...verl.utils.model import extract_multi_modal_inputs
+            from ....verl.utils.model import extract_multi_modal_inputs
 
             multi_modal_inputs = extract_multi_modal_inputs(micro_batch["multi_modal_inputs"])
 
@@ -135,7 +135,7 @@ class DataParallelPPOActor(BasePPOActor):
                     ).transpose(0, 1)
 
                 if "image_bound" in multi_modal_inputs:
-                    from ...verl.utils.dataset.vision_utils import process_multi_modal_inputs_for_minicpmo
+                    from ....verl.utils.dataset.vision_utils import process_multi_modal_inputs_for_minicpmo
 
                     multi_modal_inputs = process_multi_modal_inputs_for_minicpmo(
                         input_ids, attention_mask, position_ids, cu_seqlens, multi_modal_inputs
@@ -279,7 +279,7 @@ class DataParallelPPOActor(BasePPOActor):
                     log_probs = logprobs_from_logits(logits, micro_batch["input_ids"][:, 1: ])
                     if calculate_entropy:
                         if not self.config.entropy_checkpointing:
-                            # entropy = verl_F.entropy_from_logits(logits)  # (bsz, response_length)
+                            # entropy = verl_F.entropy_from_logits(logits)
                             entropy = verl_F.masked_entropy_from_logits(logits, micro_batch["action_mask"][:, : -1])
                         else:
                             entropy = torch.utils.checkpoint.checkpoint(verl_F.masked_entropy_from_logits, logits, micro_batch["action_mask"][:, : -1])
@@ -485,7 +485,7 @@ class DataParallelPPOActor(BasePPOActor):
                     if loss_mode != "rollout_correction" and rollout_log_prob is not None:
                         # Compute metrics using CURRENT policy π_θ vs π_rollout
                         # Tracks evolving off-policy gap as π_θ updates during mini-batch training
-                        from ...verl.trainer.ppo.rollout_corr_helper import compute_rollout_corr_metrics_from_logprobs
+                        from ....verl.trainer.ppo.rollout_corr_helper import compute_rollout_corr_metrics_from_logprobs
 
                         rollout_corr_metrics = compute_rollout_corr_metrics_from_logprobs(
                             log_prob=log_prob,

@@ -152,6 +152,9 @@ class RolloutConfig(BaseConfig):
     val_kwargs: SamplingConfig = field(default_factory=SamplingConfig)
 
     max_model_len: Optional[int] = 16384
+
+    max_tokens: int = 8192
+    
     max_num_seqs: int = 1024
 
     # note that the logprob computation should belong to the actor

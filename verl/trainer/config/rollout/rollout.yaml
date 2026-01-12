@@ -8,7 +8,7 @@ name: ???
 mode: async
 
 # Sampling temperature for rollout.
-temperature: 1.0
+temperature: ${oc.select:agent.generation_config.temperature,1.0}
 
 # Top-k sampling parameter. -1 for vLLM rollout, 0 for HF rollout.
 top_k: -1
@@ -61,8 +61,11 @@ pipeline_model_parallel_size: 1
 # max number of tokens in a batch
 max_num_batched_tokens: 8192
 
-# max length for rollout
+# Deprecated, max length for rollout, not use for agentfly
 max_model_len: 16384
+
+# max new tokens per turn, which is what we use for agentfly
+max_tokens: ${oc.select:agent.generation_config.max_tokens_per_turn,1024}
 
 # max length of sequences
 max_num_seqs: 1024

@@ -1,17 +1,22 @@
 agent:
   use_agent: True
-  init_args:
+  init_config:
     model_name_or_path: null
     template: qwen2.5
     tools:
       - google_search
       - answer
-    max_length: null
+    max_model_len: null
     reward_name: "qa_f1_reward"
     backend: "async_verl"
+    tool_parser_name: "hermes"
     agent_type: "code"
+  generation_config:
+    max_tokens: 1024
+    temperature: 1.0
   max_turns: 4
   num_chains: 5
+  max_new_tokens_per_turn: 1024
 
 # Format checks enforced on CI:
 # 1. Comments must appear above each field.

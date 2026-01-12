@@ -153,12 +153,13 @@ class vLLMHttpServerBase:
 
         self.config: RolloutConfig = omega_conf_to_dataclass(config)
         self.model_config: HFModelConfig = omega_conf_to_dataclass(model_config, dataclass_type=HFModelConfig)
-        logger.info(
+        logger.debug(
             f"[vLLMHttpServer] Setting max_model_len: prompt_length={self.config.prompt_length}, "
             f"response_length={self.config.response_length}, "
-            f"max_model_len={self.config.prompt_length + self.config.response_length}"
+            f"max_model_len={self.config.max_model_len}"
         )
-        self.config.max_model_len = self.config.prompt_length + self.config.response_length
+        # self.config.max_model_len = self.config.prompt_length + self.config.response_length
+        
         self.rollout_mode = rollout_mode
         self.workers = workers
 
@@ -403,10 +404,11 @@ class vLLMHttpServerBase:
         """Generate sequence with token-in-token-out."""
         # TODO(@wuxibin): switch to `/generate` http endpoint once multi-modal support ready.
         logger.debug(f"[vLLMHttpServer] generate: max_model_len={self.config.max_model_len}")
-        max_tokens = self.config.max_model_len - len(prompt_ids)
+
+        # max_tokens = self.config.max_tokens
         sampling_params["logprobs"] = 0 if sampling_params.pop("logprobs", False) else None
         sampling_params.setdefault("repetition_penalty", self.config.get("repetition_penalty", 1.0))
-        sampling_params = SamplingParams(max_tokens=max_tokens, **sampling_params)
+        sampling_params = SamplingParams(**sampling_params)
         prompt_ids = _qwen2_5_vl_dedup_image_tokens(prompt_ids, self.model_config.processor)
         prompt = TokensPrompt(
             prompt_token_ids=prompt_ids, multi_modal_data={"image": image_data} if image_data else None
@@ -421,6 +423,8 @@ class vLLMHttpServerBase:
                 lora_request = LoRARequest(
                     lora_name=VLLM_LORA_NAME, lora_int_id=VLLM_LORA_INT_ID, lora_path=VLLM_LORA_PATH
                 )
+
+        logger.debug(f"[vLLMHttpServer] sampling_params: {sampling_params}")
 
         generator = self.engine.generate(
             prompt=prompt, sampling_params=sampling_params, request_id=request_id, lora_request=lora_request
