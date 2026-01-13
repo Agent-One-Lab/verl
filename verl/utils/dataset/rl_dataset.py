@@ -677,7 +677,7 @@ class RLHFAgentDataset(Dataset):
         return image
     
     def _build_messages(self, row_dict):
-        question_keys = ['question', 'problem', 'instruction']
+        question_keys = ['prompt', 'question', 'instruction', 'problem']
         for key in question_keys:
             question = None
             if key in row_dict:
@@ -687,7 +687,7 @@ class RLHFAgentDataset(Dataset):
             raise ValueError(f"question not found in row_dict: {row_dict}")
         
         if "image" in row_dict:
-            from ...verl.utils.dataset.vision_utils import process_image
+            from ....verl.utils.dataset.vision_utils import process_image
             # image = process_image(row_dict["image"])
             image = row_dict["image"]
             image = self._process_image(image)

@@ -132,7 +132,7 @@ class RolloutConfig(BaseConfig):
     over_sample_rate: float = 0.0
 
     prompt_length: int = 8192
-    response_length: int = 8192
+    response_length: int = 16384
 
     dtype: str = "bfloat16"
     gpu_memory_utilization: float = 0.5
@@ -153,7 +153,7 @@ class RolloutConfig(BaseConfig):
 
     max_model_len: Optional[int] = 16384
 
-    max_tokens: int = 8192
+    max_tokens: int = 16384
     
     max_num_seqs: int = 1024
 
