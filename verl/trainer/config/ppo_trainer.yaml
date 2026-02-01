@@ -2,7 +2,7 @@ agent:
   use_agent: True
   init_config:
     model_name_or_path: null
-    template: qwen2.5
+    template: null
     tools:
       - google_search
       - answer
