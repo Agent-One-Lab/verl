@@ -47,19 +47,18 @@ class NaiveRewardManager(AbstractRewardManager):
         """We will expand this function gradually based on the available datasets"""
 
         # If there is rm score, we directly return rm score. Otherwise, we compute via rm_score_fn
-        reward_extra_info = defaultdict(list)
-        if return_dict:
-            for key in data.non_tensor_batch.keys():
-                if key.startswith("rm_"):
-                    reward_extra_info[key[3:]].extend(data.non_tensor_batch[key].tolist())
-            return {"reward_tensor": data.batch["rm_scores"], "reward_extra_info": reward_extra_info}
-        else:
-            return data.batch["rm_scores"]
-            
         if "rm_scores" in data.batch.keys():
+            reward_extra_info = defaultdict(list)
             if return_dict:
-                reward_extra_keys = data.meta_info.get("reward_extra_keys", [])
-                reward_extra_info = {key: data.non_tensor_batch[key] for key in reward_extra_keys}
+                # Keys with "rm_" prefix (e.g. from agent_base.get_verl_data_proto)
+                for key in data.non_tensor_batch.keys():
+                    if key.startswith("rm_"):
+                        reward_extra_info[key[3:]].extend(data.non_tensor_batch[key].tolist())
+                # Keys from meta_info (e.g. from agent_loop which stores without rm_ prefix)
+                for key in data.meta_info.get("reward_extra_keys", []):
+                    if key in data.non_tensor_batch:
+                        arr = data.non_tensor_batch[key]
+                        reward_extra_info[key] = arr.tolist() if hasattr(arr, "tolist") else list(arr)
                 return {"reward_tensor": data.batch["rm_scores"], "reward_extra_info": reward_extra_info}
             else:
                 return data.batch["rm_scores"]

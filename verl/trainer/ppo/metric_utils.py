@@ -103,6 +103,9 @@ def compute_data_metrics(batch: DataProto, use_critic: bool = True) -> Dict[str,
             - critic/vf_explained_var: Explained variance of the value function (if use_critic=True)
             - response_length/mean, max, min, clip_ratio: Statistics about response lengths
             - prompt_length/mean, max, min, clip_ratio: Statistics about prompt lengths
+            - reward_extra/{key}/mean, max, min: For each key returned by the reward function
+              (besides "reward"), if present in batch.meta_info["reward_extra_keys"] and
+              batch.non_tensor_batch, e.g. reward_extra/em/mean, reward_extra/f1/mean.
     """
     sequence_score = batch.batch["token_level_scores"].sum(-1)
     sequence_reward = batch.batch["token_level_rewards"].sum(-1)
@@ -229,6 +232,17 @@ def compute_data_metrics(batch: DataProto, use_critic: bool = True) -> Dict[str,
         metrics["tool_call_counts/min"] = tool_call_counts.min()
         metrics["tool_call_counts/max"] = tool_call_counts.max()
         metrics["tool_call_counts/mean"] = tool_call_counts.mean()
+
+    # Reward function extra keys (e.g. em, f1, fmt from qa_em_format_reward); documented for training logs
+    for key in batch.meta_info.get("reward_extra_keys", []):
+        if key not in batch.non_tensor_batch:
+            continue
+        arr = batch.non_tensor_batch[key]
+        if not isinstance(arr, np.ndarray) or not np.issubdtype(arr.dtype, np.number):
+            continue
+        metrics[f"reward_extra/{key}/mean"] = float(np.mean(arr))
+        metrics[f"reward_extra/{key}/max"] = float(np.max(arr))
+        metrics[f"reward_extra/{key}/min"] = float(np.min(arr))
 
     return metrics
 
