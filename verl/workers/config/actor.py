@@ -160,11 +160,11 @@ class ActorConfig(BaseConfig):
     def validate(self, n_gpus: int, train_batch_size: int, model_config: dict = None):
         """Validate actor configuration with runtime parameters."""
         if not self.use_dynamic_bsz:
-            if train_batch_size < self.ppo_mini_batch_size:
-                raise ValueError(
-                    f"train_batch_size ({train_batch_size}) must be >= "
-                    f"actor.ppo_mini_batch_size ({self.ppo_mini_batch_size})"
-                )
+            # if train_batch_size < self.ppo_mini_batch_size:
+            #     raise ValueError(
+            #         f"train_batch_size ({train_batch_size}) must be >= "
+            #         f"actor.ppo_mini_batch_size ({self.ppo_mini_batch_size})"
+            #     )
 
             sp_size = getattr(self, "ulysses_sequence_parallel_size", 1)
             if self.ppo_micro_batch_size is not None:

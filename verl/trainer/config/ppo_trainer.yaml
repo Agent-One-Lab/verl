@@ -17,7 +17,8 @@ agent:
     temperature: 1.0
   max_turns: 4
   num_chains: 5
-
+  train_on_last_turn: False
+  
 # Format checks enforced on CI:
 # 1. Comments must appear above each field.
 # 2. There must be a blank line between each field.

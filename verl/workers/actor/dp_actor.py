@@ -280,9 +280,9 @@ class DataParallelPPOActor(BasePPOActor):
                     if calculate_entropy:
                         if not self.config.entropy_checkpointing:
                             # entropy = verl_F.entropy_from_logits(logits)
-                            entropy = verl_F.masked_entropy_from_logits(logits, micro_batch["action_mask"][:, : -1])
+                            entropy = verl_F.masked_entropy_from_logits(logits, micro_batch["action_mask"][:, 1:])
                         else:
-                            entropy = torch.utils.checkpoint.checkpoint(verl_F.masked_entropy_from_logits, logits, micro_batch["action_mask"][:, : -1])
+                            entropy = torch.utils.checkpoint.checkpoint(verl_F.masked_entropy_from_logits, logits, micro_batch["action_mask"][:, 1:])
 
             return entropy, log_probs
 
@@ -429,9 +429,10 @@ class DataParallelPPOActor(BasePPOActor):
                     micro_batch_metrics = {}
                     model_inputs = {**micro_batch.batch, **micro_batch.non_tensor_batch}
                     # response_mask = model_inputs["response_mask"]
-                    action_mask = model_inputs["action_mask"][:, : -1]
+                    # log_prob[:, j] predicts token at position j+1 → mask and advantage by position j+1
+                    action_mask = model_inputs["action_mask"][:, 1:]
                     old_log_prob = model_inputs["old_log_probs"]
-                    advantages = model_inputs["advantages"][:, : -1]
+                    advantages = model_inputs["advantages"][:, 1:]
 
                     entropy_coeff = self.config.entropy_coeff
                     loss_agg_mode = self.config.loss_agg_mode

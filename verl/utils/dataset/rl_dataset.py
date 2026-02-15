@@ -732,7 +732,9 @@ class RLHFAgentDataset(Dataset):
         
         messages, question = self._build_messages(row_dict)
         row_dict["messages"] = messages
-        row_dict["data_source"] = self.sources[item]
+        # Use per-example data_source from the row if present (e.g. "nq", "hotpotqa");
+        # otherwise fall back to file-based source so validation can group by data_source.
+        row_dict["data_source"] = row_dict.get("data_source", self.sources[item])
         row_dict["question"] = question
         # May be for compatibility with the original dataset
         # And we don't actually need this

@@ -578,15 +578,30 @@ class RayPPOTrainer:
                 # test_output_gen_batch_padded = self.actor_rollout_wg.generate_sequences(test_gen_batch_padded)
                 pass
             else:
-                # test_output_gen_batch_padded = self.async_rollout_manager.generate_sequences(test_gen_batch_padded)
                 self.agent_wrapper.set_llm_engine(self.async_rollout_manager, self.tokenizer, self.processor)
-                self.run_on_bg(self.agent_wrapper.run(max_turns=self.config.agent.max_turns, messages=test_gen_batch_padded.non_tensor_batch["messages"], num_chains=1, generation_config=self.config.agent.generation_config))
-                test_output_gen_batch_padded = self.agent_wrapper.get_verl_data_proto()
+                # set temperature to 0.0 for validation
+                generation_config = {k: v for k, v in self.config.agent.generation_config.items() if k != "temperature"}
+                generation_config["temperature"] = 0.0
+                self.run_on_bg(self.agent_wrapper.run(max_turns=self.config.agent.max_turns, messages=test_gen_batch_padded.non_tensor_batch["messages"], num_chains=1, generation_config=generation_config))
+                test_output_gen_batch_padded = self.agent_wrapper.get_verl_data_proto(train_on_last_turn=False)
 
             # unpad
             test_output_gen_batch = unpad_dataproto(test_output_gen_batch_padded, pad_size=pad_size)
 
             sample_uids.extend(test_output_gen_batch.non_tensor_batch["uid"])
+
+            # Capture data_source before union: agent output (test_output_gen_batch) does not
+            # carry data_source, and reading after union can miss it if keys get overwritten.
+            # Use config.data.reward_fn_key so grouping matches the reward manager.
+            reward_fn_key = getattr(self.config.data, "reward_fn_key", "data_source")
+            batch_size_for_default = test_batch.batch.batch_size[0]
+            data_source_arr = test_batch.non_tensor_batch.get(
+                reward_fn_key,
+                np.array(["unknown"] * batch_size_for_default, dtype=object),
+            )
+            if not isinstance(data_source_arr, np.ndarray):
+                data_source_arr = np.array(data_source_arr, dtype=object)
+            data_source_lst.append(data_source_arr)
 
             # Store generated outputs
             # output_ids = test_output_gen_batch.batch["responses"]
@@ -613,8 +628,6 @@ class RayPPOTrainer:
             if "__num_turns__" in test_batch.non_tensor_batch:
                 sample_turns.append(test_batch.non_tensor_batch["__num_turns__"])
 
-            data_source_lst.append(test_batch.non_tensor_batch.get("data_source", ["unknown"] * reward_tensor.shape[0]))
-
         self._maybe_log_val_generations(inputs=sample_inputs, outputs=sample_outputs, scores=sample_scores)
 
         # dump generations
@@ -633,9 +646,6 @@ class RayPPOTrainer:
             assert len(lst) == 0 or len(lst) == len(sample_scores), f"{key_info}: {len(lst)=}, {len(sample_scores)=}"
 
         data_sources = np.concatenate(data_source_lst, axis=0)
-        # print(f"[validate] Reward extra infos: {reward_extra_infos_dict.keys()}")
-        # for key in reward_extra_infos_dict.keys():
-        #     print(f"[validate] {key}: {len(reward_extra_infos_dict[key])}")
 
         data_src2var2metric2val = process_validation_metrics(data_sources, sample_uids, reward_extra_infos_dict)
         metric_dict = {}
@@ -1066,7 +1076,7 @@ class RayPPOTrainer:
                             # gen_batch_output = self.async_rollout_manager.generate_sequences(gen_batch_output)
                             self.agent_wrapper.set_llm_engine(self.async_rollout_manager, self.tokenizer, self.processor)
                             self.run_on_bg(self.agent_wrapper.run(max_turns=self.config.agent.max_turns, messages=gen_batch.non_tensor_batch["messages"], num_chains=self.config.agent.num_chains, generation_config=self.config.agent.generation_config))
-                            gen_batch_output = self.agent_wrapper.get_verl_data_proto()
+                            gen_batch_output = self.agent_wrapper.get_verl_data_proto(train_on_last_turn=self.config.agent.train_on_last_turn, world_size=self.actor_rollout_wg.world_size)
 
                         # timing_raw.update(gen_batch_output.meta_info["timing"])
                         # gen_batch_output.meta_info.pop("timing", None)
@@ -1100,7 +1110,11 @@ class RayPPOTrainer:
 
                             del rm_scores, gen_baseline_batch, gen_baseline_output
                     # repeat to align with repeated responses in rollout
+
                     batch = batch.repeat(repeat_times=self.config.agent.num_chains, interleave=False)
+                    if self.config.agent.train_on_last_turn:
+                        batch = batch.repeat(repeat_times=gen_batch_output.meta_info["repeated_nums"], interleave=False)
+                    
                     # print(f"[RayTrainer] batch: {batch}")
                     # print(f"[RayTrainer] gen_batch_output: {gen_batch_output}")
                     batch = batch.union(gen_batch_output)
