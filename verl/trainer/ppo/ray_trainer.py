@@ -31,7 +31,7 @@ from pprint import pprint
 from typing import Dict, Optional, Type
 import ray
 from agentfly.agents.auto import AutoAgent
-from agentfly.envs import clear_enroot_containers
+# from enroot import clear_enroot_containers
 import numpy as np
 import ray
 import torch
@@ -288,7 +288,7 @@ class RayPPOTrainer:
 
         # Agent rollout related initializationa
         # Before starting the training, clear all enroot containers
-        clear_enroot_containers()
+        # clear_enroot_containers()
         print(f"Config.Agent: {config.agent}")
         self.agent_wrapper = AutoAgent.from_config(config.agent.init_config)
         # set jinja template for vllm rollout

@@ -9,7 +9,8 @@ agent:
       - answer
     max_model_len: null
     reward_name: "qa_f1_reward"
-    backend: "async_verl"
+    backend_config: 
+      backend: "async_verl"
     tool_parser_name: "hermes"
     agent_type: "code"
   generation_config:

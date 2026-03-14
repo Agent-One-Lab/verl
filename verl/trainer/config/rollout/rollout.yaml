@@ -18,7 +18,7 @@ top_p: 1
 
 # typically the same as data max prompt length
 # same as data.max_prompt_length if it exists
-prompt_length: ${oc.select:data.max_prompt_length,8192}
+prompt_length: ${oc.select:agent.init_config.max_model_len,8192}
 
 # typically the same as agent.generation_config.max_tokens
 response_length: ${oc.select:agent.generation_config.max_tokens,16384}
@@ -61,7 +61,7 @@ pipeline_model_parallel_size: 1
 max_num_batched_tokens: 8192
 
 # Deprecated, max length for rollout, not use for agentfly
-max_model_len: 16384
+max_model_len: ${oc.select:agent.init_config.max_model_len,16384}
 
 # max new tokens per turn, which is what we use for agentfly
 max_tokens: ${oc.select:agent.generation_config.max_tokens,1024}
