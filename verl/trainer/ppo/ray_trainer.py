@@ -65,6 +65,7 @@ from ....verl.utils.seqlen_balancing import calculate_workload, get_seqlen_balan
 from ....verl.utils.torch_functional import masked_mean
 from ....verl.utils.tracking import ValidationGenerationsLogger
 
+
 @dataclass
 class ResourcePoolManager:
     """
@@ -582,7 +583,18 @@ class RayPPOTrainer:
                 # set temperature to 0.0 for validation
                 generation_config = {k: v for k, v in self.config.agent.generation_config.items() if k != "temperature"}
                 generation_config["temperature"] = 0.0
-                self.run_on_bg(self.agent_wrapper.run(max_turns=self.config.agent.max_turns, messages=test_gen_batch_padded.non_tensor_batch["messages"], num_chains=1, generation_config=generation_config))
+                self.run_on_bg(
+                    self.agent_wrapper.run(
+                        max_turns=self.config.agent.max_turns,
+                        messages=test_gen_batch_padded.non_tensor_batch["messages"],
+                        num_chains=1,
+                        max_concurrent_chains=self.config.agent.run_config.get(
+                            "max_concurrent_chains"
+                        ),
+                        generation_config=generation_config,
+                        run_config=self.config.agent.run_config,
+                    )
+                )
                 test_output_gen_batch_padded = self.agent_wrapper.get_verl_data_proto(train_on_last_turn=False)
 
             # unpad
@@ -1075,7 +1087,16 @@ class RayPPOTrainer:
                         else:
                             # gen_batch_output = self.async_rollout_manager.generate_sequences(gen_batch_output)
                             self.agent_wrapper.set_llm_engine(self.async_rollout_manager, self.tokenizer, self.processor)
-                            self.run_on_bg(self.agent_wrapper.run(max_turns=self.config.agent.max_turns, messages=gen_batch.non_tensor_batch["messages"], num_chains=self.config.agent.num_chains, generation_config=self.config.agent.generation_config))
+                            self.run_on_bg(
+                                self.agent_wrapper.run(
+                                    max_turns=self.config.agent.run_config.max_turns,
+                                    messages=gen_batch.non_tensor_batch["messages"],
+                                    num_chains=self.config.agent.run_config.num_chains,
+                                    max_concurrent_chains=self.config.agent.run_config.max_concurrent_chains,
+                                    generation_config=self.config.agent.run_config.generation_config,
+                                    context_config=self.config.agent.run_config.context_config,
+                                )
+                            )
                             gen_batch_output = self.agent_wrapper.get_verl_data_proto(train_on_last_turn=self.config.agent.train_on_last_turn, world_size=self.actor_rollout_wg.world_size)
 
                         # timing_raw.update(gen_batch_output.meta_info["timing"])
@@ -1111,7 +1132,7 @@ class RayPPOTrainer:
                             del rm_scores, gen_baseline_batch, gen_baseline_output
                     # repeat to align with repeated responses in rollout
 
-                    batch = batch.repeat(repeat_times=self.config.agent.num_chains, interleave=False)
+                    batch = batch.repeat(repeat_times=self.config.agent.run_config.num_chains, interleave=False)
                     if self.config.agent.train_on_last_turn:
                         batch = batch.repeat(repeat_times=gen_batch_output.meta_info["repeated_nums"], interleave=False)
                     

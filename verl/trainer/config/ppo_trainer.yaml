@@ -13,11 +13,15 @@ agent:
       backend: "async_verl"
     tool_parser_name: "hermes"
     agent_type: "code"
-  generation_config:
-    max_tokens: 1024
-    temperature: 1.0
-  max_turns: 4
-  num_chains: 5
+  run_config:
+    max_turns: 4
+    num_chains: 5
+    max_concurrent_chains: null
+    generation_config:
+      max_tokens: 1024
+      temperature: 1.0
+    context_config:
+      resource_backend: "local"
   train_on_last_turn: False
   
 # Format checks enforced on CI:
