@@ -215,6 +215,18 @@ def compute_advantage(
         )
         data.batch["advantages"] = advantages
         data.batch["returns"] = returns
+    elif adv_estimator == AdvantageEstimator.CONTEXTRL:
+        advantages, returns = core_algos.compute_contextrl_advantage_return(
+            token_level_rewards=data.batch["token_level_rewards"],
+            values=data.batch["values"],
+            response_mask=data.batch["action_mask"],
+            index=data.non_tensor_batch["batch_idx"],
+            segment_index=data.non_tensor_batch["segment_idx"],
+            gamma=gamma,
+            lam=lam,
+        )
+        data.batch["advantages"] = advantages
+        data.batch["returns"] = returns
     else:
         # handle all other adv estimator type other than GAE and GRPO
         adv_estimator_fn = core_algos.get_adv_estimator_fn(adv_estimator)
@@ -1112,8 +1124,8 @@ class RayPPOTrainer:
                     # repeat to align with repeated responses in rollout
 
                     batch = batch.repeat(repeat_times=self.config.agent.num_chains, interleave=False)
-                    if self.config.agent.train_on_last_turn:
-                        batch = batch.repeat(repeat_times=gen_batch_output.meta_info["repeated_nums"], interleave=False)
+                    # if self.config.agent.train_on_last_turn:
+                    batch = batch.repeat(repeat_times=gen_batch_output.meta_info["repeat_times"], interleave=False)
                     
                     # print(f"[RayTrainer] batch: {batch}")
                     # print(f"[RayTrainer] gen_batch_output: {gen_batch_output}")

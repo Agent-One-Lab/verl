@@ -22,7 +22,7 @@ __all__ = ["register_adv_est", "get_adv_estimator_fn", "AdvantageEstimator"]
 
 from collections import defaultdict
 from enum import Enum
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Dict, Optional, Tuple
 import logging
 import numpy as np
 import torch
@@ -105,6 +105,7 @@ class AdvantageEstimator(str, Enum):
     GPG = "gpg"
     RLOO_VECTORIZED = "rloo_vectorized"
     GRPO_VECTORIZED = "grpo_vectorized"
+    CONTEXTRL = "contextrl"
 
 
 ADV_ESTIMATOR_REGISTRY: dict[str, Any] = {}
@@ -261,6 +262,356 @@ def compute_gae_advantage_return(
     return advantages, returns
 
 
+
+import torch
+import numpy as np
+from collections import defaultdict
+from typing import Tuple
+
+
+@register_adv_est(AdvantageEstimator.CONTEXTRL)
+def compute_contextrl_advantage_return(
+    token_level_rewards: torch.Tensor,  # [B, L]
+    values: torch.Tensor,               # [B, L]
+    response_mask: torch.Tensor,        # [B, L]
+    index: np.ndarray,                  # [B] group id
+    segment_index: np.ndarray,          # [B] segment order within group
+    gamma: torch.Tensor = 1.0,
+    lam: torch.Tensor = 1.0,
+    prevent_penalize_context: bool = False,
+    penalize_context_max_segments: int = 0,
+    empty_segment_penalty: float = 0.0,
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    Hierarchical advantage estimation for summarization-based context management.
+
+    Two-level credit assignment:
+      - Low-level (action) advantage: GAE within each segment. The last step
+        bootstraps to V^high of the next segment, coupling the two levels.
+      - High-level (summarization) advantage: Applied ONLY to summary tokens
+        in non-final segments. Measures the segment-level TD error — how much
+        better/worse this segment (including its summary) performed relative
+        to V^high's prediction at the boundary.
+
+    Key design decisions:
+      1. The low-level GAE already incorporates cross-segment information via
+         boundary bootstrapping. The high-level advantage provides an ADDITIONAL
+         signal specifically for summary tokens, reflecting how the quality of
+         the summary affected downstream outcomes.
+      2. The final segment produces a final answer, not a summary, so no
+         high-level advantage is added there.
+      3. Single-segment rollouts have no summarization, so only low-level
+         GAE is computed.
+
+    Args:
+        token_level_rewards: [B, L] per-token rewards (sparse, mostly 0)
+        values: [B, L] critic predictions
+        response_mask: [B, L] binary mask (1 = LLM-generated response token)
+        index: [B] rollout group id (same rollout shares same index)
+        segment_index: [B] segment order within rollout (0, 1, 2, ...)
+        gamma: discount factor
+        lam: GAE lambda
+        prevent_penalize_context: if True, clamp negative high-level advantages
+            for summary tokens using a dynamic schedule based on segment index.
+        penalize_context_max_segments: segment index at which full penalty
+            is restored. Only used when prevent_penalize_context is True.
+            If set to 0, all negative high-level advantages are fully clamped.
+        empty_segment_penalty: negative reward added to the last response token
+            of non-first segments that contain only one contiguous block of
+            response tokens. This penalizes degenerate behavior where the model
+            immediately summarizes again or gives up without performing any
+            tool-calling actions. A segment with multiple contiguous blocks
+            (action -> observation -> action -> ... -> summary) is healthy.
+            A segment with only one block means no tool interaction happened.
+            Recommended value: -1.0 to -2.0 (should be small relative to
+            success reward of 10.0).
+
+    Returns:
+        advantages: [B, L] hierarchical advantages
+        returns: [B, L] target returns for critic training
+    """
+    B, L = token_level_rewards.shape
+    device = token_level_rewards.device
+    dtype = token_level_rewards.dtype
+
+    advantages = torch.zeros(B, L, device=device, dtype=dtype)
+    returns = torch.zeros(B, L, device=device, dtype=dtype)
+
+    # =========================================================================
+    # Step 1: Build group structure
+    # group_map: group_id -> [(segment_order, batch_index), ...] sorted
+    # =========================================================================
+    group_map = defaultdict(list)
+    for b in range(B):
+        group_map[index[b]].append((int(segment_index[b]), b))
+    for gid in group_map:
+        group_map[gid].sort(key=lambda x: x[0])
+
+    # =========================================================================
+    # Step 2: Precompute per-segment response positions
+    # =========================================================================
+    seg_resp_positions = {}
+    for b in range(B):
+        seg_resp_positions[b] = torch.nonzero(response_mask[b], as_tuple=False).squeeze(-1)
+        if seg_resp_positions[b].dim() == 0:
+            seg_resp_positions[b] = seg_resp_positions[b].unsqueeze(0)
+
+    # =========================================================================
+    # Step 2.5: Apply empty segment penalty
+    #
+    # For non-first segments (segment_index > 0), check if the response
+    # tokens form only a single contiguous block. If so, the model did
+    # no tool calling — it either immediately summarized again or directly
+    # gave a final answer without interacting with the environment.
+    #
+    # A healthy segment has multiple blocks:
+    #   [response] [observation gap] [response] [gap] ... [response]
+    #   = multiple contiguous blocks = tool calling happened
+    #
+    # A degenerate segment has one block:
+    #   [response response response ...]
+    #   = no observation gaps = no tool calling
+    #
+    # We add the penalty to the LAST response token of such segments,
+    # so it propagates backward through GAE to all tokens in the segment.
+    # =========================================================================
+    if empty_segment_penalty != 0.0:
+        # Make a writable copy so we don't modify the caller's tensor
+        token_level_rewards = token_level_rewards.clone()
+
+        for b in range(B):
+            # Skip first segments (segment_index == 0) — they always start fresh
+            if int(segment_index[b]) == 0:
+                continue
+
+            positions = seg_resp_positions[b]
+            if len(positions) == 0:
+                continue
+
+            n_blocks = _count_contiguous_blocks(positions)
+            if n_blocks <= 1:
+                # Degenerate segment: only one response block, no tool calling
+                last_pos = positions[-1].item()
+                token_level_rewards[b, last_pos] += empty_segment_penalty
+
+    # =========================================================================
+    # Step 3: Extract V^high at segment boundaries and determine which
+    #         segments are final (last in their rollout group)
+    # =========================================================================
+    def _get_boundary_value(b: int) -> torch.Tensor:
+        positions = seg_resp_positions[b]
+        if len(positions) == 0:
+            return torch.tensor(0.0, device=device, dtype=dtype)
+        return values[b, positions[0].item()]
+
+    v_high_self = {}
+    v_high_next = {}
+    is_final_segment = {}
+
+    for gid, segs in group_map.items():
+        for k, (seg_idx, b) in enumerate(segs):
+            v_high_self[b] = _get_boundary_value(b)
+            if k + 1 < len(segs):
+                v_high_next[b] = _get_boundary_value(segs[k + 1][1])
+                is_final_segment[b] = False
+            else:
+                v_high_next[b] = torch.tensor(0.0, device=device, dtype=dtype)
+                is_final_segment[b] = True
+
+    # =========================================================================
+    # Step 4: Low-level GAE within each segment (BATCHED)
+    #
+    # Process all B segments in parallel by iterating backward over the
+    # sequence dimension L once. This matches the standard GAE's O(L)
+    # structure instead of O(B * n_response_tokens) Python iterations.
+    #
+    # KEY COUPLING: at the last response token of each segment, the GAE
+    # bootstraps to V^high of the next segment. We handle this by setting
+    # a per-element bootstrap value that's injected at the right point.
+    #
+    # The backward loop uses the same mask-based carry-through as standard
+    # GAE: at observation tokens, nextvalues and lastgaelam carry forward
+    # unchanged. At response tokens, they update normally.
+    # =========================================================================
+    c = gamma * lam
+
+    # Build per-element bootstrap: V^high of next segment (0 for final segments)
+    v_bootstrap_vec = torch.zeros(B, device=device, dtype=dtype)
+    for b in range(B):
+        v_bootstrap_vec[b] = v_high_next[b]
+
+    # Backward loop over all positions, batched across B
+    nextvalues = v_bootstrap_vec.clone()  # [B]
+    lastgaelam = torch.zeros(B, device=device, dtype=dtype)
+
+    for t in reversed(range(L)):
+        mask_t = response_mask[:, t]  # [B]
+        r_t = token_level_rewards[:, t]  # [B]
+        v_t = values[:, t]  # [B]
+
+        delta = r_t + gamma * nextvalues - v_t
+        new_gae = delta + c * lastgaelam
+
+        # At response tokens: update nextvalues and lastgaelam
+        # At observation tokens: carry forward unchanged
+        nextvalues = v_t * mask_t + nextvalues * (1 - mask_t)
+        lastgaelam = new_gae * mask_t + lastgaelam * (1 - mask_t)
+
+        advantages[:, t] = lastgaelam
+        returns[:, t] = lastgaelam + v_t
+
+    # =========================================================================
+    # Step 5: High-level advantage for summary tokens (NON-FINAL segments only)
+    #
+    # The low-level GAE already captures cross-segment signal via boundary
+    # bootstrapping. The high-level advantage provides an ADDITIONAL signal
+    # specifically for summary tokens, measuring how the choice of summary
+    # affected outcomes beyond what V^high predicted.
+    #
+    # For segment k (non-final), the high-level TD error is:
+    #   delta^high_k = r_macro_k + gamma_macro_k * V^high(s_{b_{k+1}}) - V^high(s_{b_k})
+    #
+    # We use GAE across the segment chain for multi-step high-level credit,
+    # but ONLY apply the result to summary tokens in non-final segments.
+    # =========================================================================
+    for gid, segs in group_map.items():
+        n_segs = len(segs)
+        if n_segs <= 1:
+            # Single-segment rollout: no summarization, skip high-level
+            continue
+
+        # --- Compute macro quantities per segment ---
+        macro_rewards = []
+        macro_discounts = []
+
+        for k, (seg_idx, b) in enumerate(segs):
+            positions = seg_resp_positions[b]
+            reward = token_level_rewards[b]
+
+            if len(positions) == 0:
+                macro_rewards.append(torch.tensor(0.0, device=device, dtype=dtype))
+                macro_discounts.append(torch.tensor(1.0, device=device, dtype=dtype))
+                continue
+
+            # Discounted sum of rewards within this segment
+            n_pos = len(positions)
+            gamma_pows = torch.pow(gamma, torch.arange(n_pos, device=device, dtype=dtype))
+            r_macro = torch.sum(gamma_pows * reward[positions])
+
+            macro_rewards.append(r_macro)
+            macro_discounts.append(torch.pow(gamma, torch.tensor(n_pos, device=device, dtype=dtype)))
+
+        # --- High-level GAE backward across segments ---
+        high_advs = [None] * n_segs
+        gae_high = torch.tensor(0.0, device=device, dtype=dtype)
+
+        for k in range(n_segs - 1, -1, -1):
+            v_k = v_high_self[segs[k][1]]
+            r_k = macro_rewards[k]
+            gamma_k = macro_discounts[k]
+
+            if k + 1 < n_segs:
+                v_k_next = v_high_self[segs[k + 1][1]]
+            else:
+                v_k_next = torch.tensor(0.0, device=device, dtype=dtype)
+
+            delta_high = r_k + gamma_k * v_k_next - v_k
+            gae_high = delta_high + gamma_k * lam * gae_high
+            high_advs[k] = gae_high
+
+        # --- Assign high-level advantage to summary tokens ---
+        # ONLY for non-final segments (which produce summaries).
+        #
+        # If prevent_penalize_context is True, apply dynamic clamping:
+        #   - Segment 0 (first summary): full protection, clamp to 0
+        #   - Segment k: allow k/penalize_context_max_segments of the
+        #     negative signal through
+        #   - Segment >= penalize_context_max_segments: full penalty (no clamp)
+        #
+        # This way early summarizations are protected (the model is still
+        # learning to summarize), while later ones get penalized if they
+        # indicate the agent is being inefficient.
+        for k, (seg_idx, b) in enumerate(segs):
+            if is_final_segment[b]:
+                continue
+
+            positions = seg_resp_positions[b]
+            if len(positions) == 0:
+                continue
+
+            summary_positions = _find_last_contiguous_block(positions)
+            adv_high = high_advs[k]
+
+            if prevent_penalize_context and adv_high < 0:
+                # k is the segment index (0 = first segment/summary)
+                # Compute penalty ratio: 0.0 at k=0, 1.0 at k>=max_segments
+                if penalize_context_max_segments > 0:
+                    penalty_ratio = min(k / penalize_context_max_segments, 1.0)
+                else:
+                    # max_segments=0 means full protection for all segments
+                    penalty_ratio = 0.0
+
+                # Scale the negative advantage: 0% penalty -> fully clamped,
+                # 100% penalty -> original negative value passes through
+                adv_high = adv_high * penalty_ratio
+
+            for pos in summary_positions:
+                p = pos.item()
+                advantages[b, p] += adv_high
+
+    return advantages, returns
+
+
+def _find_last_contiguous_block(positions: torch.Tensor) -> torch.Tensor:
+    """
+    Find the last contiguous block of token positions.
+
+    Given sorted positions like [2, 3, 4, 10, 11, 15, 16, 17, 18],
+    returns [15, 16, 17, 18].
+
+    This identifies summary tokens: the final LLM generation turn
+    at the end of a segment, separated from earlier action turns
+    by observation tokens (which have response_mask=0).
+    """
+    if len(positions) <= 1:
+        return positions
+
+    n = len(positions)
+    block_start = n - 1
+
+    for i in range(n - 2, -1, -1):
+        if positions[i + 1] - positions[i] == 1:
+            block_start = i
+        else:
+            break
+
+    return positions[block_start:]
+
+
+def _count_contiguous_blocks(positions: torch.Tensor) -> int:
+    """
+    Count the number of contiguous blocks in sorted token positions.
+
+    Examples:
+      [2, 3, 4, 10, 11, 15, 16, 17, 18] -> 3 blocks
+      [1, 2, 3, 4, 5] -> 1 block (degenerate: no tool calling)
+      [1, 2, 5, 6, 9] -> 3 blocks (healthy: has observation gaps)
+      [] -> 0 blocks
+
+    A healthy segment has >= 2 blocks (action-observation-action pattern).
+    A degenerate segment has <= 1 block (no tool interaction happened).
+    """
+    if len(positions) == 0:
+        return 0
+
+    n_blocks = 1
+    for i in range(len(positions) - 1):
+        if positions[i + 1] - positions[i] > 1:
+            n_blocks += 1
+
+    return n_blocks
+
+    
 # NOTE(sgm): this implementation only consider outcome supervision, where the reward is a scalar.
 @register_adv_est(AdvantageEstimator.GRPO)  # or simply: @register_adv_est("grpo")
 def compute_grpo_outcome_advantage(
