@@ -114,7 +114,7 @@ class DataParallelPPOCritic(BasePPOCritic):
 
                 # pad it back
                 values = pad_input(values_rmpad, indices=indices, batch=batch, seqlen=seqlen).squeeze(-1)
-                # values = values[:, -response_length - 1 : -1]
+                values = values[:, :-1]
             else:
                 output = self.critic_module(
                     input_ids=input_ids,
@@ -129,8 +129,8 @@ class DataParallelPPOCritic(BasePPOCritic):
                 else:
                     values = output.logits
                 # For all agent cases, we use the full inputs
-                # values = values[:, -response_length - 1 : -1].squeeze(-1)
                 values = values.squeeze(-1)
+                values = values[:, :-1]
             return values
 
     def _optimizer_step(self):
@@ -182,17 +182,18 @@ class DataParallelPPOCritic(BasePPOCritic):
         if use_dynamic_bsz:
             values = restore_dynamic_batch(values, batch_idx_list)
 
-        if "response_mask" in data.batch:
-            response_mask = data.batch["response_mask"]
-            response_mask = response_mask.to(values.device)
-            values = values * response_mask  # Only action tokens have values
+        if "action_mask" in data.batch:
+            action_mask = data.batch["action_mask"].to(values.device)
+            values = values * action_mask
         return values
 
     @GPUMemoryLogger(role="dp critic", logger=logger)
     def update_critic(self, data: DataProto):
         # make sure we are in training mode
         self.critic_module.train()
-        metrics = {}
+        metrics = {
+            "critic/vf_loss": 0.0,
+        }
 
         select_keys = ["input_ids", "action_mask", "attention_mask", "position_ids", "values", "returns"]
         has_multi_modal_inputs = "multi_modal_inputs" in data.non_tensor_batch.keys()
@@ -247,12 +248,12 @@ class DataParallelPPOCritic(BasePPOCritic):
 
                     micro_batch_metrics.update(
                         {
-                            "critic/vf_loss": vf_loss.detach().item() * loss_scale_factor,
                             "critic/vf_clipfrac": vf_clipfrac.detach().item(),
                             "critic/vpred_mean": masked_mean(vpreds, action_mask).detach().item(),
                         }
                     )
 
+                    metrics["critic/vf_loss"] += vf_loss.detach().item() * loss_scale_factor
                     append_to_dict(metrics, micro_batch_metrics)
 
                 grad_norm = self._optimizer_step()

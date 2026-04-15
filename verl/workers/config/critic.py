@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import warnings
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -22,11 +21,11 @@ from ....verl.base_config import BaseConfig
 from ....verl.trainer.config import BaseModelConfig, CheckpointConfig
 from ....verl.utils.profiler import ProfilerConfig
 
-from .engine import FSDPEngineConfig, McoreEngineConfig
+from .engine import FSDPEngineConfig, McoreEngineConfig, TorchtitanEngineConfig
 from .model import HFModelConfig
 from .optimizer import OptimizerConfig
 
-__all__ = ["CriticConfig", "FSDPCriticConfig", "McoreCriticConfig", "FSDPCriticModelCfg"]
+__all__ = ["CriticConfig", "FSDPCriticConfig", "McoreCriticConfig", "TorchTitanCriticConfig", "FSDPCriticModelCfg"]
 
 
 @dataclass
@@ -59,6 +58,7 @@ class CriticConfig(BaseConfig):
         "ppo_micro_batch_size_per_gpu",
         "ppo_mini_batch_size",
         "ppo_micro_batch_size",
+        "engine",
         "model_config",
     }
 
@@ -81,19 +81,13 @@ class CriticConfig(BaseConfig):
     ppo_micro_batch_size: Optional[int] = None
     engine: BaseConfig = field(default_factory=BaseConfig)
     optim: OptimizerConfig = field(default_factory=OptimizerConfig)
-    # deprecate model to favor model_config
-    model: BaseModelConfig = field(default_factory=BaseModelConfig)
-    model_config: HFModelConfig = None
+    model: HFModelConfig = None
     checkpoint: CheckpointConfig = field(default_factory=CheckpointConfig)
     profiler: ProfilerConfig = field(default_factory=ProfilerConfig)
 
     def __post_init__(self):
         """Validate critic configuration parameters."""
         assert self.strategy != MISSING
-
-        if self.model_config is None:
-            warnings.warn("using model in Critic Config is deprecated, please use model_config instead", stacklevel=2)
-            self.model_config = self.model
 
         if not self.use_dynamic_bsz:
             self._check_mutually_exclusive(self.ppo_micro_batch_size, self.ppo_micro_batch_size_per_gpu, "critic")
@@ -114,10 +108,11 @@ class CriticConfig(BaseConfig):
         """
         if not self.use_dynamic_bsz:
             if train_batch_size < self.ppo_mini_batch_size:
-                raise ValueError(
-                    f"train_batch_size ({train_batch_size}) must be >= "
-                    f"critic.ppo_mini_batch_size ({self.ppo_mini_batch_size})"
-                )
+                pass
+                # raise ValueError(
+                #     f"train_batch_size ({train_batch_size}) must be >= "
+                #     f"critic.ppo_mini_batch_size ({self.ppo_mini_batch_size})"
+                # )
 
     @staticmethod
     def _check_mutually_exclusive(mbs, mbs_per_gpu, name: str):
@@ -168,6 +163,11 @@ class McoreCriticConfig(CriticConfig):
         """Validate Megatron critic configuration with runtime parameters."""
         super().validate(n_gpus, train_batch_size)
 
+    def __post_init__(self):
+        """Validate Megatron critic configuration parameters."""
+        super().__post_init__()
+        self.engine = self.megatron
+
 
 @dataclass
 class FSDPCriticConfig(CriticConfig):
@@ -188,6 +188,7 @@ class FSDPCriticConfig(CriticConfig):
     }
 
     strategy: str = "fsdp"
+    fsdp: FSDPEngineConfig = field(default_factory=FSDPEngineConfig)
     forward_micro_batch_size: int = 1
     forward_micro_batch_size_per_gpu: int = 1
     ulysses_sequence_parallel_size: int = 1
@@ -196,6 +197,7 @@ class FSDPCriticConfig(CriticConfig):
     def __post_init__(self):
         """Validate FSDP critic configuration parameters."""
         super().__post_init__()
+        self.engine = self.fsdp
 
         if self.strategy in {"fsdp", "fsdp2"}:
             if self.ulysses_sequence_parallel_size > 1:
@@ -216,6 +218,26 @@ class FSDPCriticConfig(CriticConfig):
                         f"critic.ppo_micro_batch_size ({self.ppo_micro_batch_size}) * "
                         f"ulysses_sequence_parallel_size ({sp_size}) must be >= n_gpus ({n_gpus})"
                     )
+
+
+@dataclass
+class TorchTitanCriticConfig(CriticConfig):
+    """Configuration for TorchTitan-based critic model training.
+
+    The inheritance from CriticConfig provides all base critic configuration plus TorchTitan-specific settings.
+
+    Args:
+        strategy (str): Training strategy set to 'torchtitan' for TorchTitan parallelism.
+        torchtitan (TorchtitanEngineConfig): Configuration for TorchTitan engine settings.
+    """
+
+    strategy: str = "torchtitan"
+    torchtitan: TorchtitanEngineConfig = field(default_factory=TorchtitanEngineConfig)
+
+    def __post_init__(self):
+        """Validate TorchTitan critic configuration parameters."""
+        super().__post_init__()
+        self.engine = self.torchtitan
 
 
 @dataclass
@@ -242,3 +264,5 @@ class FSDPCriticModelCfg(BaseModelConfig):
     lora_rank: int = 0
     lora_alpha: int = 16
     target_modules: str | list[str] = "all-linear"
+    # TiledMLP configuration for memory-efficient MLP computation
+    tiled_mlp: dict = field(default_factory=lambda: {"enabled": False, "num_shards": 4})

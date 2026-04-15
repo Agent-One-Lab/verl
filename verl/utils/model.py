@@ -24,6 +24,7 @@ from typing import Optional
 
 import numpy as np
 import torch
+from tensordict.tensorclass import NonTensorData
 from torch import nn
 from transformers import (
     AutoConfig,
@@ -31,16 +32,29 @@ from transformers import (
     AutoModelForCausalLM,
     AutoModelForSequenceClassification,
     AutoModelForTokenClassification,
-    AutoModelForVision2Seq,
     GenerationConfig,
     MistralForSequenceClassification,
     PretrainedConfig,
     PreTrainedModel,
 )
+
+try:
+    from transformers import AutoModelForVision2Seq
+except ImportError:
+    AutoModelForVision2Seq = None
+
+try:
+    from transformers import AutoModelForImageTextToText
+except ImportError:
+    AutoModelForImageTextToText = AutoModelForVision2Seq
+
 from transformers.modeling_outputs import CausalLMOutputWithPast
 
 from ...verl.models.registry import ModelRegistry
 from ...verl.utils.import_utils import is_trl_available
+from ...verl.utils.transformers_compat import get_auto_model_for_vision2seq
+
+AutoModelForVision2Seq = get_auto_model_for_vision2seq()
 
 
 class LambdaLayer(nn.Module):
@@ -556,6 +570,8 @@ def get_parallel_gptmodel_from_config(
     from megatron.core.models.gpt.gpt_layer_specs import get_gpt_decoder_block_spec
     from megatron.core.models.gpt.gpt_model import GPTModel
 
+    from ...verl.models.mcore.config_converter import get_hf_rope_theta
+
     use_te = True
     assert tfconfig.normalization == "RMSNorm", "only RMSNorm is supported for now"
     transformer_layer_spec = get_gpt_decoder_block_spec(tfconfig, use_transformer_engine=use_te)
@@ -572,16 +588,16 @@ def get_parallel_gptmodel_from_config(
         post_process=post_process,
         share_embeddings_and_output_weights=share_embeddings_and_output_weights,
         position_embedding_type="rope",
-        rotary_base=hf_config.rope_theta,
+        rotary_base=get_hf_rope_theta(hf_config),
         **rope_scaling_args,
     )
     # # for layer in parallel_model.decoder.layers:
     # layer.self_attention.core_attention.flash_attention.softmax_scale = None
     if post_process and value:
-        from ...verl.models.llama.megatron.layers.parallel_linear import LinearForLastLayer
+        from ...verl.models.mcore.bridge import LinearForLastLayer
 
         parallel_model.output_layer = LinearForLastLayer(
-            input_size=tfconfig.hidden_size, output_size=1, config=tfconfig
+            input_size=tfconfig.hidden_size, output_size=1, sequence_parallel=tfconfig.sequence_parallel
         )
     return parallel_model
 
@@ -590,7 +606,8 @@ def patch_valuehead_model(model) -> None:
     from types import MethodType
 
     from transformers import PreTrainedModel
-    from trl import AutoModelForCausalLMWithValueHead
+    from trl.experimental.ppo import AutoModelForCausalLMWithValueHead
+
 
     def tie_weights(self: "AutoModelForCausalLMWithValueHead") -> None:
         if isinstance(self.pretrained_model, PreTrainedModel):
@@ -617,7 +634,7 @@ def patch_valuehead_model(model) -> None:
 
 
 def load_valuehead_model(local_path, torch_dtype, model_config, trust_remote_code):
-    from transformers import AutoModelForCausalLM, AutoModelForTokenClassification, AutoModelForVision2Seq
+    from transformers import AutoModelForCausalLM, AutoModelForTokenClassification
 
     try:
         model = AutoModelForTokenClassification.from_pretrained(
@@ -636,7 +653,7 @@ def load_valuehead_model(local_path, torch_dtype, model_config, trust_remote_cod
 
     assert is_trl_available()
 
-    from trl import AutoModelForCausalLMWithValueHead
+    from trl.experimental.ppo import AutoModelForCausalLMWithValueHead
 
     if type(model_config) in AutoModelForVision2Seq._model_mapping.keys():
         module_class = AutoModelForVision2Seq
@@ -649,6 +666,9 @@ def load_valuehead_model(local_path, torch_dtype, model_config, trust_remote_cod
         attn_implementation="flash_attention_2",
         trust_remote_code=trust_remote_code,
     )
+    # vlm models
+    if hasattr(model_config, "text_config"):
+        ori_model.config.hidden_size = model_config.text_config.hidden_size
     model = AutoModelForCausalLMWithValueHead.from_pretrained(ori_model)
     patch_valuehead_model(model)
     return model
@@ -673,14 +693,20 @@ def get_hf_auto_model_class(hf_config):
                 actor_module_class = AutoModelForVision2Seq
             case "AutoModelForCausalLM":
                 actor_module_class = AutoModelForCausalLM
+            case "AutoModelForImageTextToText":
+                actor_module_class = AutoModelForImageTextToText
             case _:
                 actor_module_class = AutoModel
     else:
         actor_module_class = AutoModel
-        for key, cls in _architecture_to_auto_class.items():
-            if key in hf_config.architectures[0]:
-                actor_module_class = cls
-                break
+        # For VLM models, we use type to check instead of architecture
+        if type(hf_config) in AutoModelForImageTextToText._model_mapping.keys():
+            actor_module_class = AutoModelForImageTextToText
+        else:
+            for key, cls in _architecture_to_auto_class.items():
+                if key in hf_config.architectures[0]:
+                    actor_module_class = cls
+                    break
 
     return actor_module_class
 
@@ -709,6 +735,10 @@ def extract_multi_modal_inputs(
         selected_batch_data = [batch_data[i] for i in indices if i < len(batch_data)]
 
     for inputs in selected_batch_data:
+        inputs = inputs.data if isinstance(inputs, NonTensorData) else inputs
+        # Mixed pure text and multi-modal dataset.
+        if inputs is None:
+            continue
         if "image_bound" in inputs:
             has_image_bound = True
         for key, value in inputs.items():

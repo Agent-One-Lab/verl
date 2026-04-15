@@ -9,10 +9,8 @@ train_files="['$gsm8k_train_path', '$math_train_path']"
 test_files="['$gsm8k_test_path', '$math_test_path']"
 
 # For async rollout mode, dataset should return raw chat.
-rollout_mode="sync"
-if [ "$rollout_mode" = "async" ]; then
-    return_raw_chat="True"
-fi
+rollout_mode="async"
+return_raw_chat="True"
 
 python3 -m verl.trainer.main_ppo \
     algorithm.adv_estimator=gae \
@@ -45,8 +43,8 @@ python3 -m verl.trainer.main_ppo \
     critic.model.path=Qwen/Qwen2-7B-Instruct \
     critic.model.enable_gradient_checkpointing=True \
     critic.ppo_max_token_len_per_gpu=98304 \
-    critic.model.fsdp_config.param_offload=False \
-    critic.model.fsdp_config.optimizer_offload=False \
+    critic.fsdp.param_offload=False \
+    critic.fsdp.optimizer_offload=False \
     algorithm.use_kl_in_reward=False \
     trainer.critic_warmup=0 \
     trainer.logger='["console","wandb"]' \

@@ -60,8 +60,10 @@ class NaiveRewardManager(AbstractRewardManager):
                         arr = data.non_tensor_batch[key]
                         reward_extra_info[key] = arr.tolist() if hasattr(arr, "tolist") else list(arr)
                 return {"reward_tensor": data.batch["rm_scores"], "reward_extra_info": reward_extra_info}
-            else:
-                return data.batch["rm_scores"]
+        else:
+            reward_from_rm_scores = self._extract_reward_from_rm_scores(data, return_dict)
+            if reward_from_rm_scores is not None:
+                return reward_from_rm_scores
 
         reward_tensor = torch.zeros_like(data.batch["responses"], dtype=torch.float32)
         reward_extra_info = defaultdict(list)
