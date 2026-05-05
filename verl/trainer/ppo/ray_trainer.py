@@ -1248,13 +1248,9 @@ class RayPPOTrainer:
             # step 2: convert from padding to nopadding
 
             attention_mask = batch_td["attention_mask"]
-            print(f"[RayTrainer] _compute_old_log_prob attention_mask: {attention_mask.shape} token num: {attention_mask.sum().item()}")
             action_mask = batch_td["action_mask"]
-            print(f"[RayTrainer] _compute_old_log_prob action_mask: {action_mask.shape}")
 
             batch_td = left_right_2_no_padding(batch_td)
-
-            print(f"[RayTrainer] _compute_old_log_prob batch_td: {batch_td.keys()} {batch_td['input_ids'].shape}")
 
             # step 3: add meta info
             tu.assign_non_tensor(batch_td, calculate_entropy=True, compute_loss=False)
@@ -1268,9 +1264,7 @@ class RayPPOTrainer:
             # step 4. No padding to padding
             # entropy = no_padding_2_padding(entropy, batch_td)
             # log_probs = no_padding_2_padding(log_probs, batch_td)
-            print(f"[RayTrainer] _compute_old_log_prob before unpadding entropy: {entropy.offsets().diff()}")
             entropy = no_padding_2_padding_with_attention_mask(entropy, batch_td, target_mask_key="action_mask")
-            print(f"[RayTrainer] _compute_old_log_prob after unpadding entropy: {entropy.shape}")
 
             log_probs = no_padding_2_padding_with_attention_mask(
                 log_probs, batch_td, target_mask_key="action_mask"
@@ -1560,8 +1554,6 @@ class RayPPOTrainer:
 
                         # extract reward_tensor and reward_extra_infos_dict for training
                         reward_tensor, reward_extra_infos_dict = extract_reward(batch)
-                        print(f"[RayTrainer] reward_tensor: {reward_tensor}")
-                        print(f"[RayTrainer] reward_extra_infos_dict: {reward_extra_infos_dict}")
                     # Operating Mode Selection:
                     # - Bypass mode: Sets old_log_probs = rollout_log_probs (2 policies: π_rollout, π_θ)
                     # - Decoupled mode: Recomputes old_log_probs as proximal anchor (3 policies: π_rollout, π_old, π_θ)
