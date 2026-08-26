@@ -41,6 +41,10 @@ def main(config):
     # Automatically set `config.trainer.device = npu` when running on Ascend NPU.
     auto_set_device(config)
     config = migrate_legacy_reward_impl(config)
+    # Preflight: download any missing train/val task files (approval-gated).
+    from ...utils.download import ensure_training_data
+
+    ensure_training_data(config)
     run_ppo(config)
 
 

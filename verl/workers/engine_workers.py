@@ -625,6 +625,7 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
     @DistProfiler.annotate(color="olive", role="ref_compute_log_prob")
     @_with_routing_replay_flag(enabled=False)
     def compute_ref_log_prob(self, data: TensorDict) -> TensorDict:
+        log_gpu_memory_usage("[mem-probe] worker: entering compute_ref_log_prob", logger=logger)
         output = self.ref.infer_batch(data=data)
         return output.cpu() if output is not None else None
 
@@ -632,6 +633,7 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
     @DistProfiler.annotate(color="blue", role="actor_compute_log_prob")
     @_with_routing_replay_flag(enabled=True)
     def compute_log_prob(self, data: TensorDict) -> TensorDict:
+        log_gpu_memory_usage("[mem-probe] worker: entering compute_log_prob (actor)", logger=logger)
         output = self.actor.infer_batch(data)
 
         return output.cpu() if output is not None else None
@@ -640,6 +642,7 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
     @DistProfiler.annotate(color="red", role="actor_update")
     @_with_routing_replay_flag(enabled=True)
     def update_actor(self, data: TensorDict) -> TensorDict:
+        log_gpu_memory_usage("[mem-probe] worker: entering update_actor (before backward)", logger=logger)
         output = self.actor.train_mini_batch(data=data)
         return output.cpu() if output is not None else None
 

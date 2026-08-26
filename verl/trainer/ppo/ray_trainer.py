@@ -45,6 +45,7 @@ from ....verl.single_controller.ray.base import create_colocated_worker_cls
 from ....verl.trainer.config import AlgoConfig
 from ....verl.trainer.distillation.losses import is_distillation_enabled
 from ....verl.trainer.ppo import core_algos
+from ....verl.trainer.ppo import core_gigpo
 from ....verl.trainer.ppo.core_algos import AdvantageEstimator, agg_loss
 from ....verl.trainer.ppo.metric_utils import (
     compute_data_metrics,
@@ -204,6 +205,22 @@ def compute_advantage(
         )
         data.batch["advantages"] = advantages
         data.batch["returns"] = returns
+    elif adv_estimator == AdvantageEstimator.GIGPO:
+        # Multi-turn GiGPO: episode advantage (group by uid, GRPO-style) + step
+        # advantage (per-turn discounted returns, grouped by (uid, anchor), scattered
+        # onto turn token-spans). Reads the per-turn signals carried from the rollout.
+        advantages, returns = core_gigpo.compute_gigpo_multiturn_advantage(
+            token_level_rewards=data.batch["token_level_rewards"],
+            response_mask=data.batch["action_mask"],
+            index=data.non_tensor_batch["uid"],
+            step_observations=data.non_tensor_batch["step_observations"],
+            step_rewards=data.non_tensor_batch["step_rewards"],
+            gamma=gamma,
+            step_advantage_w=1.0,  # TODO: expose via GiGPOConfig when tuning
+            norm_by_std=norm_adv_by_std_in_grpo,
+        )
+        data.batch["advantages"] = advantages
+        data.batch["returns"] = returns
     else:
         # handle all other adv estimator type other than GAE and GRPO
         adv_estimator_fn = core_algos.get_adv_estimator_fn(adv_estimator)
@@ -296,6 +313,10 @@ class RayPPOTrainer:
         # set jinja template for vllm rollout
         self.config.actor_rollout_ref.rollout.chat_template = self.agent_wrapper.jinja_template
         self.tokenizer.chat_template = self.agent_wrapper.jinja_template
+        # Mirror onto the processor too: VL models (e.g. Qwen3.5) render prompts through the
+        # processor, so a tokenizer-only override leaves the native template in effect.
+        if self.processor is not None:
+            self.processor.chat_template = self.agent_wrapper.jinja_template
 
         self.hybrid_engine = config.actor_rollout_ref.hybrid_engine
         assert self.hybrid_engine, "Currently, only support hybrid engine"
@@ -587,7 +608,7 @@ class RayPPOTrainer:
 
             self.agent_wrapper.set_llm_engine(self.async_rollout_manager, self.tokenizer, self.processor)
             # set temperature to 0.0 for validation
-            generation_config = {k: v for k, v in self.config.agent.generation_config.items() if k != "temperature"}
+            generation_config = {k: v for k, v in self.config.agent.run_config.generation_config.items() if k != "temperature"}
             generation_config["temperature"] = 0.0
             self.run_on_bg(self.agent_wrapper.run(
                 max_turns=self.config.agent.run_config.max_turns,
@@ -634,15 +655,21 @@ class RayPPOTrainer:
             # output_texts = [self.tokenizer.decode(ids, skip_special_tokens=True) for ids in output_ids]
             # sample_outputs.extend(output_texts)
 
+            # The agent output carries its own full-trajectory input_ids/attention_mask/
+            # position_ids; drop the dataset's prompt-only versions so union doesn't
+            # collide on them (mirrors the training path, see fit()).
+            overlap_keys = [
+                k for k in ("input_ids", "attention_mask", "position_ids")
+                if k in test_batch.batch.keys()
+            ]
+            if overlap_keys:
+                test_batch.pop(batch_keys=overlap_keys)
             test_batch = test_batch.union(test_output_gen_batch)
             test_batch.meta_info["validate"] = True
 
-            # Store original inputs
-            input_ids = test_batch.batch["prompts"]
-            # TODO: Can we keep special tokens except for padding tokens?
-            input_texts = [self.tokenizer.decode(ids, skip_special_tokens=True) for ids in input_ids]
-            sample_inputs.extend(input_texts)
-            sample_uids.extend(test_batch.non_tensor_batch["uid"])
+            # sample_inputs / sample_uids are already collected above (from the
+            # gen batch's "question" and the agent output's "uid"). The agent data
+            # proto carries no verl-style "prompts" field, so don't re-derive them here.
 
             # evaluate using reward_function
             reward_tensor, reward_extra_info = extract_reward(test_batch)

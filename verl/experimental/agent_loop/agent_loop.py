@@ -491,6 +491,12 @@ class AgentLoopWorker:
         self.tokenizer = self.model_config.tokenizer
         self.tokenizer.chat_template = self.config.actor_rollout_ref.rollout.chat_template
         self.processor = self.model_config.processor
+        # VL models (e.g. Qwen3.5) render rollout prompts through ``self.processor``, not
+        # ``self.tokenizer`` (see AgentLoopBase.apply_chat_template). The agent's jinja template
+        # must be mirrored onto the processor or the processor keeps the model's native template
+        # and the agent-format instructions (e.g. <action>) are silently ignored.
+        if self.processor is not None:
+            self.processor.chat_template = self.config.actor_rollout_ref.rollout.chat_template
 
         agent_loop_config_path = self.rollout_config.agent.agent_loop_config_path
         if agent_loop_config_path:
@@ -592,7 +598,20 @@ class AgentLoopWorker:
                     self._run_agent_loop(sampling_params, trajectory_info[i], trace=trace_this_sample, **kwargs)
                 )
             )
-        outputs = await asyncio.gather(*tasks)
+        try:
+            outputs = await asyncio.gather(*tasks)
+        except Exception as e:
+            # Raising across the ray async-actor boundary does NOT propagate to the
+            # driver: the ObjectRef never resolves and the rollout hangs silently
+            # (e.g. a chat-template render error). Carry the error back as data
+            # instead — the driver (generate_sequences_async) detects this marker
+            # and raises loudly there, where it propagates cleanly and fails the run.
+            import traceback
+
+            batch.meta_info["_agent_loop_error"] = (
+                f"{type(e).__name__}: {e}\n{traceback.format_exc()}"
+            )
+            return batch
 
         output = self._postprocess(
             outputs, input_non_tensor_batch=batch.non_tensor_batch, validate=batch.meta_info.get("validate", False)
@@ -1183,6 +1202,15 @@ class AgentLoopManager:
                 for worker, chunk in zip(self.agent_loop_workers, chunkes, strict=True)
             ]
         )
+        # A worker returns its error as data (raising across the ray async-actor
+        # boundary hangs the driver); surface it loudly here so the run fails
+        # cleanly instead of hanging.
+        for out in outputs:
+            err = out.meta_info.get("_agent_loop_error") if out is not None else None
+            if err:
+                raise RuntimeError(
+                    f"Agent-loop worker failed during generation:\n{err}"
+                )
         if self.stream_teacher_with_rollout:
             await self.teacher_model_manager.sleep()
         output = DataProto.concat(outputs)
@@ -1247,6 +1275,17 @@ class AgentLoopManager:
             for worker_idx in workers_used
         ]
         outputs = await asyncio.gather(*[asyncio.wrap_future(ref.future()) for ref in refs])
+
+        # A worker returns its error as data (see AgentLoopWorker.generate_sequences)
+        # because raising across the ray async-actor boundary hangs the driver.
+        # Surface it loudly here, on the driver, where it propagates cleanly and
+        # fails the run instead of hanging silently.
+        for out in outputs:
+            err = out.meta_info.get("_agent_loop_error") if out is not None else None
+            if err:
+                raise RuntimeError(
+                    f"Agent-loop worker failed during generation:\n{err}"
+                )
 
         if self.stream_teacher_with_rollout:
             await self.teacher_model_manager.sleep()
