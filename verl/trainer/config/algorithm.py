@@ -652,6 +652,13 @@ class AlgoConfig(BaseConfig):
     lam: float = 1.0
     adv_estimator: str = "gae"
     norm_adv_by_std_in_grpo: bool = True
+    # GiGPO step-level advantage (matches verl-agent's algorithm.gigpo.*):
+    #   step_advantage_w: weight on the step advantage (1.0 = full GiGPO, 0.0 = pure GRPO)
+    #   gigpo_mode: "mean_std_norm" (÷ group std) or "mean_norm" (subtract mean only)
+    #   invalid_action_penalty_coef: post-discount per-step penalty for invalid actions
+    step_advantage_w: float = 1.0
+    gigpo_mode: str = "mean_std_norm"
+    invalid_action_penalty_coef: float = 0.1
     use_kl_in_reward: bool = False
     kl_penalty: str = "kl"
     kl_ctrl: KLControlConfig = field(default_factory=KLControlConfig)

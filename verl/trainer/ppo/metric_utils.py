@@ -69,7 +69,10 @@ def _compute_response_info(batch: DataProto) -> dict[str, Any]:
     # prompt_mask = batch.batch["attention_mask"][:, :-response_length]
     # response_mask = batch.batch["attention_mask"][:, -response_length:]
     action_mask = batch.batch["action_mask"]
-    prompt_mask = action_mask == 0
+    # Exclude padding: action_mask is 0 on pad positions too, so ``action_mask == 0``
+    # alone counts right-padding as prompt (prompt_length ~ max_len - response_len).
+    attention_mask = batch.batch["attention_mask"]
+    prompt_mask = (action_mask == 0) & (attention_mask == 1)
     response_mask = action_mask == 1
 
     prompt_length = prompt_mask.sum(-1).float()
@@ -119,7 +122,10 @@ def compute_data_metrics(batch: DataProto, use_critic: bool = True) -> Dict[str,
     # prompt_mask = batch.batch["attention_mask"][:, :-max_response_length].bool()
     # response_mask = batch.batch["attention_mask"][:, -max_response_length:].bool()
     action_mask = batch.batch["action_mask"]
-    prompt_mask = action_mask == 0
+    # Exclude padding: action_mask is 0 on pad positions too, so ``action_mask == 0``
+    # alone counts right-padding as prompt (prompt_length ~ max_len - response_len).
+    attention_mask = batch.batch["attention_mask"]
+    prompt_mask = (action_mask == 0) & (attention_mask == 1)
     response_mask = action_mask == 1
 
 
@@ -613,6 +619,9 @@ def process_validation_metrics(
             var_dict = uid_dict.setdefault(uid, {})
 
             for var_name, var_vals in var2vals.items():
+                # Drop missing entries: an agent reward extra that a trajectory did not
+                # report is broadcast as None, and np.mean over None crashed validation.
+                var_vals = [v for v in var_vals if v is not None]
                 # skip empty or string values
                 if not var_vals or isinstance(var_vals[0], str):
                     continue

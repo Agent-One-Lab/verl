@@ -17,6 +17,18 @@ agent:
     max_turns: 4
     num_chains: 5
     max_concurrent_chains: null
+    # Rollout strategy: "chain" (full-history multi-turn) or "step" (verl-agent-style
+    # bounded per-step; layout=per_step routes to the per-step GiGPO estimator).
+    rollout: "chain"
+    # Constructor kwargs for the rollout, e.g. for "step":
+    # {prompt_builder: alfworld_flat, history_length: 2, max_prompt_length: 2048}
+    # Loop-control policy (shared by chain and step; each "continue" | "end" | "raise"):
+    #   on_no_tool_call     - turn produced no tool call        (default: end)
+    #   on_invalid_tool_call - malformed call: bad name / args  (default: end)
+    #   on_tool_error       - exception inside a tool body      (default: continue)
+    # A tool may override per-result by writing an explicit `control`.
+    # null (open) so a run can supply arbitrary rollout kwargs via override.
+    rollout_config: null
     generation_config:
       max_tokens: 1024
       temperature: 1.0
@@ -98,6 +110,15 @@ algorithm:
 
   # Whether to normalize advantages by std (specific to GRPO)
   norm_adv_by_std_in_grpo: True
+
+  # GiGPO: weight on the step advantage (1.0 = full GiGPO, 0.0 = pure GRPO)
+  step_advantage_w: 1.0
+
+  # GiGPO normalization mode: "mean_std_norm" (divide by group std) or "mean_norm"
+  gigpo_mode: mean_std_norm
+
+  # GiGPO: post-discount per-step penalty coefficient for invalid actions
+  invalid_action_penalty_coef: 0.1
 
   # Whether to enable in-reward KL penalty
   use_kl_in_reward: False

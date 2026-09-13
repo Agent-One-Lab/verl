@@ -45,7 +45,7 @@ from ....verl.single_controller.ray.base import create_colocated_worker_cls
 from ....verl.trainer.config import AlgoConfig
 from ....verl.trainer.distillation.losses import is_distillation_enabled
 from ....verl.trainer.ppo import core_algos
-from ....verl.trainer.ppo import core_gigpo
+from .... import algorithms as agent_algorithms
 from ....verl.trainer.ppo.core_algos import AdvantageEstimator, agg_loss
 from ....verl.trainer.ppo.metric_utils import (
     compute_data_metrics,
@@ -151,6 +151,21 @@ def _align_batch_to_policy_space(batch: DataProto) -> DataProto:
     return batch
 
 
+def _reduce_to_trajectory(batch: DataProto) -> DataProto:
+    """Collapse a per-step DataProto to one row per ``traj_uid`` (the first row of each
+    trajectory). Outcome / ``rm_*`` fields are broadcast-constant within a trajectory, so any
+    representative row is valid. Used for validation so metrics are per-EPISODE (num_chains
+    samples per prompt) rather than per-step-row (which length-weights the success rate)."""
+    traj = batch.non_tensor_batch["traj_uid"]
+    seen = set()
+    idxs = []
+    for i, u in enumerate(traj):
+        if u not in seen:
+            seen.add(u)
+            idxs.append(i)
+    return batch.select_idxs(np.array(idxs, dtype=np.int64))
+
+
 def compute_advantage(
     data: DataProto,
     adv_estimator,
@@ -160,6 +175,14 @@ def compute_advantage(
     norm_adv_by_std_in_grpo=True,
     config: Optional[AlgoConfig] = None,
 ):
+    # AgentFly's agent estimators (``agentfly.algorithms``), resolved by estimator name and
+    # the batch's ``meta_info["layout"]``; names AgentFly does not provide use verl's below.
+    if agent_algorithms.has_estimator(adv_estimator):
+        estimator = agent_algorithms.get_estimator(adv_estimator, data.meta_info.get("layout"))
+        advantages, returns = estimator(data, config)
+        data.batch["advantages"] = advantages
+        data.batch["returns"] = returns
+        return data
     if adv_estimator == AdvantageEstimator.GAE:
         # Compute advantages and returns using Generalized Advantage Estimation (GAE)
         advantages, returns = core_algos.compute_gae_advantage_return(
@@ -202,22 +225,6 @@ def compute_advantage(
             segment_index=data.non_tensor_batch["segment_idx"],
             gamma=gamma,
             lam=lam,
-        )
-        data.batch["advantages"] = advantages
-        data.batch["returns"] = returns
-    elif adv_estimator == AdvantageEstimator.GIGPO:
-        # Multi-turn GiGPO: episode advantage (group by uid, GRPO-style) + step
-        # advantage (per-turn discounted returns, grouped by (uid, anchor), scattered
-        # onto turn token-spans). Reads the per-turn signals carried from the rollout.
-        advantages, returns = core_gigpo.compute_gigpo_multiturn_advantage(
-            token_level_rewards=data.batch["token_level_rewards"],
-            response_mask=data.batch["action_mask"],
-            index=data.non_tensor_batch["uid"],
-            step_observations=data.non_tensor_batch["step_observations"],
-            step_rewards=data.non_tensor_batch["step_rewards"],
-            gamma=gamma,
-            step_advantage_w=1.0,  # TODO: expose via GiGPOConfig when tuning
-            norm_by_std=norm_adv_by_std_in_grpo,
         )
         data.batch["advantages"] = advantages
         data.batch["returns"] = returns
@@ -607,18 +614,29 @@ class RayPPOTrainer:
             test_gen_batch_padded, pad_size = pad_dataproto_to_divisor(test_gen_batch, size_divisor)
 
             self.agent_wrapper.set_llm_engine(self.async_rollout_manager, self.tokenizer, self.processor)
-            # set temperature to 0.0 for validation
+            # Validation sampling follows rollout.val_kwargs (verl's own convention):
+            # greedy (temperature 0.0) unless val_kwargs.do_sample, in which case
+            # val_kwargs.temperature is used — e.g. verl-agent validates at 0.4.
+            val_kwargs = self.config.actor_rollout_ref.rollout.val_kwargs
             generation_config = {k: v for k, v in self.config.agent.run_config.generation_config.items() if k != "temperature"}
-            generation_config["temperature"] = 0.0
-            self.run_on_bg(self.agent_wrapper.run(
+            generation_config["temperature"] = (
+                float(val_kwargs.temperature) if val_kwargs.do_sample else 0.0
+            )
+            rollout_config, log_token_drift = self._agent_rollout_options()
+            run_result = self.run_on_bg(self.agent_wrapper.run(
                 max_turns=self.config.agent.run_config.max_turns,
                 messages=test_gen_batch_padded.non_tensor_batch["messages"],
                 num_chains=1,
+                rollout=self.config.agent.run_config.get("rollout", "chain"),
+                rollout_config=rollout_config,
                 generation_config=generation_config,
                 max_concurrent_chains=self.config.agent.run_config.max_concurrent_chains,
                 context_config=self.config.agent.run_config.context_config,
             ))
-            test_output_gen_batch_padded = self.agent_wrapper.get_verl_data_proto(train_on_last_turn=False)
+            test_output_gen_batch_padded = self.agent_wrapper.to_verl_dataproto(
+                run_result, train_on_last_turn=False,
+                log_token_drift=log_token_drift,
+            )
 
             # test_output_gen_batch_padded = self.async_rollout_manager.generate_sequences(test_gen_batch_padded)
 
@@ -633,7 +651,18 @@ class RayPPOTrainer:
                 self.checkpoint_manager.update_weights(self.global_steps)
 
             # unpad
-            test_output_gen_batch = unpad_dataproto(test_output_gen_batch_padded, pad_size=pad_size)
+            if test_output_gen_batch_padded.meta_info.get("layout") == "per_step":
+                # Per-step rows are per-ENV-STEP, NOT prompt-aligned: ``pad_size`` counts
+                # padding PROMPTS, so unpadding the step-rows directly would drop step-rows
+                # rather than the padding trajectories. Collapse to one row per trajectory
+                # FIRST (now prompt-aligned, padding trajectories last) so validation metrics
+                # are per-EPISODE (trajectory-level success), not length-weighted per step-row;
+                # THEN unpad the padding trajectories. Outcome / rm_ fields are broadcast-
+                # constant within a trajectory, so the representative row is exact.
+                reduced = _reduce_to_trajectory(test_output_gen_batch_padded)
+                test_output_gen_batch = unpad_dataproto(reduced, pad_size=pad_size)
+            else:
+                test_output_gen_batch = unpad_dataproto(test_output_gen_batch_padded, pad_size=pad_size)
 
             sample_uids.extend(test_output_gen_batch.non_tensor_batch["uid"])
 
@@ -649,11 +678,6 @@ class RayPPOTrainer:
             if not isinstance(data_source_arr, np.ndarray):
                 data_source_arr = np.array(data_source_arr, dtype=object)
             data_source_lst.append(data_source_arr)
-
-            # Store generated outputs
-            # output_ids = test_output_gen_batch.batch["responses"]
-            # output_texts = [self.tokenizer.decode(ids, skip_special_tokens=True) for ids in output_ids]
-            # sample_outputs.extend(output_texts)
 
             # The agent output carries its own full-trajectory input_ids/attention_mask/
             # position_ids; drop the dataset's prompt-only versions so union doesn't
@@ -671,7 +695,14 @@ class RayPPOTrainer:
             # gen batch's "question" and the agent output's "uid"). The agent data
             # proto carries no verl-style "prompts" field, so don't re-derive them here.
 
-            # evaluate using reward_function
+            # evaluate using reward_function. The agent batch carries its reward-function
+            # extras as ``rm_<key>`` non-tensor columns (e.g. ``rm_trajectory/accuracy`` =
+            # task success); expose them so validation logs them as ``val-aux`` metrics
+            # next to the mean reward, the way the reward-loop path does.
+            if "reward_extra_keys" not in test_batch.meta_info:
+                test_batch.meta_info["reward_extra_keys"] = [
+                    k for k in test_batch.non_tensor_batch if k.startswith("rm_")
+                ]
             reward_tensor, reward_extra_info = extract_reward(test_batch)
             
             scores = reward_tensor.sum(-1).cpu().tolist()
@@ -976,6 +1007,14 @@ class RayPPOTrainer:
     def run_on_bg(self, coro):
         future = asyncio.run_coroutine_threadsafe(coro, self.bg_loop)
         return future.result()
+
+    def _agent_rollout_options(self):
+        """Separate the legacy conversion setting without mutating user config."""
+        rollout_config = dict(self.config.agent.run_config.get("rollout_config") or {})
+        # Preserve existing trainer configs, but never pass training diagnostics
+        # into a rollout constructor. The converter alone owns this setting.
+        log_token_drift = rollout_config.pop("log_token_drift", True)
+        return rollout_config, log_token_drift
     
     def _save_checkpoint(self):
         from ....verl.utils.fs import local_mkdir_safe
@@ -1476,18 +1515,23 @@ class RayPPOTrainer:
                             self.async_rollout_manager.start_profile()
                                                     # gen_batch_output = self.async_rollout_manager.generate_sequences(gen_batch_output)
                         self.agent_wrapper.set_llm_engine(self.async_rollout_manager, self.tokenizer, self.processor)
-                        self.run_on_bg(self.agent_wrapper.run(
+                        rollout_config, log_token_drift = self._agent_rollout_options()
+                        run_result = self.run_on_bg(self.agent_wrapper.run(
                             max_turns=self.config.agent.run_config.max_turns,
                             messages=gen_batch.non_tensor_batch["messages"],
                             num_chains=self.config.agent.run_config.num_chains,
+                            rollout=self.config.agent.run_config.get("rollout", "chain"),
+                            rollout_config=rollout_config,
                             generation_config=self.config.agent.run_config.generation_config,
                             max_concurrent_chains=self.config.agent.run_config.max_concurrent_chains,
                             context_config=self.config.agent.run_config.context_config,
                         ))
-                        gen_batch_output = self.agent_wrapper.get_verl_data_proto(
+                        gen_batch_output = self.agent_wrapper.to_verl_dataproto(
+                            run_result,
                             train_on_last_turn=self.config.agent.train_on_last_turn,
                             world_size=self.actor_rollout_wg.world_size,
                             pad_to_multiple_of=self.config.actor_rollout_ref.actor.ppo_mini_batch_size,
+                            log_token_drift=log_token_drift,
                         )
                         # gen_batch_output = self.async_rollout_manager.generate_sequences(gen_batch_output)
                         self.checkpoint_manager.sleep_replicas()
@@ -1530,7 +1574,7 @@ class RayPPOTrainer:
                     batch = batch.repeat(repeat_times=gen_batch_output.meta_info["repeat_times"], interleave=False)
 
 
-                    
+
                     batch.pop(batch_keys=["input_ids", "attention_mask", "position_ids"])
                     batch = batch.union(gen_batch_output)
                     # batch.batch['action_mask'] = batch.batch['action_mask'][:, 1:]

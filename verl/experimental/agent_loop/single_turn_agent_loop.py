@@ -57,13 +57,22 @@ class SingleTurnAgentLoop(AgentLoopBase):
         images = multi_modal_data.get("images")
         videos = multi_modal_data.get("videos")
 
-        # 2. apply chat template and tokenize
-        prompt_ids = await self.apply_chat_template(
-            messages,
-            tools=tools,
-            images=images,
-            videos=videos,
-        )
+        # 2. apply chat template and tokenize — unless the caller pre-tokenized the prompt.
+        #    AgentFly's AsyncVerlBackend sends ``prompt_ids`` rendered with the same
+        #    tokenizer/template call its training path uses (earlier assistant turns spliced
+        #    from their sampled token ids), so the prompt sampled from here is exactly the
+        #    training row's prefix; re-rendering ``messages`` from text would re-tokenize
+        #    those turns and diverge from training.
+        prompt_ids = kwargs.get("prompt_ids")
+        if prompt_ids is not None:
+            prompt_ids = [int(t) for t in prompt_ids]
+        else:
+            prompt_ids = await self.apply_chat_template(
+                messages,
+                tools=tools,
+                images=images,
+                videos=videos,
+            )
 
         # 3. generate sequences
         metrics = {}

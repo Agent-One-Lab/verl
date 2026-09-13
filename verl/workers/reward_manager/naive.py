@@ -50,7 +50,7 @@ class NaiveRewardManager(AbstractRewardManager):
         if "rm_scores" in data.batch.keys():
             reward_extra_info = defaultdict(list)
             if return_dict:
-                # Keys with "rm_" prefix (e.g. from agent_base.get_verl_data_proto)
+                # Keys with "rm_" prefix (e.g. from agent_base.to_verl_dataproto)
                 for key in data.non_tensor_batch.keys():
                     if key.startswith("rm_"):
                         reward_extra_info[key[3:]].extend(data.non_tensor_batch[key].tolist())

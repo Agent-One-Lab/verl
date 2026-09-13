@@ -119,7 +119,6 @@ class AdvantageEstimator(str, Enum):
     OPTIMAL_TOKEN_BASELINE = "optimal_token_baseline"
     TIR_OPTIMAL_TOKEN_BASELINE = "tir_optimal_token_baseline"
     GDPO = "gdpo"
-    GIGPO = "gigpo"
 
 
 ADV_ESTIMATOR_REGISTRY: dict[str, Any] = {}
