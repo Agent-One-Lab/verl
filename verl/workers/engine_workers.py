@@ -677,6 +677,10 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
             return
 
         set_expandable_segments(False)
+        # Without param/optimizer offload nothing between the actor update and here
+        # releases PyTorch's cached blocks (the offload helpers are what call
+        # empty_cache), so the colocated vLLM wake_up below fails with CUDA OOM.
+        aggressive_empty_cache(force_sync=True)
         log_gpu_memory_usage("Before resume weights", logger=logger)
 
         # 1. resume rollout memory (weights were released during sleep)

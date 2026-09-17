@@ -120,6 +120,37 @@ algorithm:
   # GiGPO: post-discount per-step penalty coefficient for invalid actions
   invalid_action_penalty_coef: 0.1
 
+  # Teacher-scoring service for on-policy distillation (agentfly.algorithms.opd). Setting
+  # endpoints_file enables the trainer's teacher step, which stores teacher_log_probs in the batch.
+  # Separate from distillation.*, which starts verl's own teacher manager.
+  teacher:
+
+    # Endpoints file written by the teacher deployment (e.g. ~/Research/deploy/teachers/<name>.json)
+    endpoints_file: null
+
+    # Identity pin: the endpoints file must report this model / revision (null = not checked)
+    expect_model: null
+    expect_revision: null
+
+    # Concurrent requests per teacher URL (null = 2 x the deployment's dp_size)
+    concurrency: null
+
+    # Longest continuous teacher outage (unreachable / not ready) to wait out before failing
+    max_wait_s: 1800
+
+  # On-policy distillation advantage (adv_estimator=opd; agentfly.algorithms.opd):
+  # A_t = action_mask * w_t * clamp(teacher_log_prob - old_log_prob) [+ task_reward_coef * GRPO]
+  opd:
+
+    # Per-token clamp on teacher - student log-prob (offline: 99% of tokens within 2.9)
+    clamp: 5.0
+
+    # Weight on thinking tokens (up to and including each turn's first </think>); 1.0 = no reweighting
+    think_weight: 1.0
+
+    # Weight of an added GRPO outcome advantage from the task reward; 0.0 = pure OPD
+    task_reward_coef: 0.0
+
   # Whether to enable in-reward KL penalty
   use_kl_in_reward: False
 

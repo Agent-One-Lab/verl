@@ -659,6 +659,15 @@ class AlgoConfig(BaseConfig):
     step_advantage_w: float = 1.0
     gigpo_mode: str = "mean_std_norm"
     invalid_action_penalty_coef: float = 0.1
+    # Teacher-scoring service for on-policy distillation (agentfly.algorithms.opd). Setting
+    # ``endpoints_file`` enables the trainer's teacher step, which stores ``teacher_log_probs`` in
+    # the batch. Keys: endpoints_file, expect_model, expect_revision, concurrency, max_wait_s.
+    # Separate from ``distillation.*``, which starts verl's own teacher manager.
+    teacher: dict[str, Any] = field(default_factory=dict)
+    # OPD advantage (adv_estimator=opd; agentfly.algorithms.opd). Keys: clamp (per-token clamp of
+    # teacher − student log-prob, default 5.0), think_weight (weight on thinking tokens, default 1.0),
+    # task_reward_coef (λ for an added GRPO outcome advantage, default 0.0 = pure OPD).
+    opd: dict[str, Any] = field(default_factory=dict)
     use_kl_in_reward: bool = False
     kl_penalty: str = "kl"
     kl_ctrl: KLControlConfig = field(default_factory=KLControlConfig)

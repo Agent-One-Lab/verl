@@ -20,10 +20,12 @@ This trainer supports model-agonistic model initialization with huggingface
 import sysconfig
 import asyncio
 import logging
+import math
 import threading
 import json
 import os
 import uuid
+from types import SimpleNamespace
 from collections import defaultdict
 from copy import deepcopy
 from pprint import pprint
@@ -337,6 +339,11 @@ class RayPPOTrainer:
         self.resource_pool_manager = resource_pool_manager
         self.use_reference_policy = need_reference_policy(self.config)
         self.use_teacher_policy = need_teacher_policy(self.config)
+        # On-policy distillation (agentfly.algorithms.opd): a teacher-scoring service fills
+        # batch["teacher_log_probs"] for the OPD estimator. Separate from verl's distillation.*.
+        self.use_agent_teacher = bool((self.config.algorithm.get("teacher") or {}).get("endpoints_file"))
+        self._warned_opd_optimizer_steps = False
+        self._check_agent_teacher_config()
 
         self.use_rm = need_reward_model(self.config)
 
@@ -632,6 +639,9 @@ class RayPPOTrainer:
                 generation_config=generation_config,
                 max_concurrent_chains=self.config.agent.run_config.max_concurrent_chains,
                 context_config=self.config.agent.run_config.context_config,
+                # Put agent/rollout/* on the trainer's axis. Validation reuses the
+                # training step on purpose: it must not advance that axis itself.
+                global_step=self.global_steps,
             ))
             test_output_gen_batch_padded = self.agent_wrapper.to_verl_dataproto(
                 run_result, train_on_last_turn=False,
@@ -1007,6 +1017,75 @@ class RayPPOTrainer:
     def run_on_bg(self, coro):
         future = asyncio.run_coroutine_threadsafe(coro, self.bg_loop)
         return future.result()
+
+    def _check_agent_teacher_config(self):
+        """Startup checks for the teacher step and the OPD estimator."""
+        estimator = agent_algorithms.registry.estimator_name(self.config.algorithm.adv_estimator)
+        if estimator == "opd" and not self.use_agent_teacher:
+            raise ValueError(
+                "algorithm.adv_estimator=opd needs algorithm.teacher.endpoints_file (the teacher-scoring service)"
+            )
+        if self.use_agent_teacher and self.use_teacher_policy:
+            raise ValueError(
+                "algorithm.teacher.endpoints_file and distillation.enabled both start a teacher; enable only one"
+            )
+        if estimator == "opd":
+            actor = self.config.actor_rollout_ref.actor
+            if actor.ppo_epochs > 1:
+                print(f"[OPD] WARNING: ppo_epochs={actor.ppo_epochs}; OPD assumes one on-policy update per batch")
+            if actor.use_kl_loss:
+                print("[OPD] WARNING: use_kl_loss=True adds a reference-model KL on top of the teacher signal")
+            if actor.entropy_coeff != 0:
+                print(f"[OPD] WARNING: entropy_coeff={actor.entropy_coeff} adds an entropy bonus to the OPD objective")
+
+    def _start_agent_teacher(self, batch: DataProto):
+        """Start teacher scoring of the batch on the background loop; returns at once (None if disabled).
+
+        Only a snapshot of input_ids/attention_mask is handed over, so later steps that add fields to
+        the batch cannot race with the scoring thread.
+        """
+        if not self.use_agent_teacher:
+            return None
+        snapshot = SimpleNamespace(batch={
+            "input_ids": batch.batch["input_ids"],
+            "attention_mask": batch.batch["attention_mask"],
+        })
+        future = asyncio.run_coroutine_threadsafe(
+            asyncio.to_thread(
+                agent_algorithms.compute_teacher_log_probs, snapshot, self.config.algorithm.teacher
+            ),
+            self.bg_loop,
+        )
+        return future, snapshot
+
+    def _finish_agent_teacher(self, pending, batch: DataProto, metrics: dict) -> None:
+        """Wait for the teacher step; store teacher_log_probs in the batch and merge teacher/* metrics."""
+        if pending is None:
+            return
+        future, snapshot = pending
+        teacher_log_probs, teacher_metrics = future.result()  # re-raises teacher errors (e.g. unavailable)
+        if not torch.equal(batch.batch["input_ids"], snapshot.batch["input_ids"]):
+            raise RuntimeError("batch rows changed while the teacher was scoring them; teacher_log_probs would misalign")
+        batch.batch["teacher_log_probs"] = teacher_log_probs
+        metrics.update(teacher_metrics)
+
+    def _agent_algorithm_metrics(self, batch: DataProto) -> dict:
+        """Algorithm-specific metrics for AgentFly estimators (like the GDPO block for verl's)."""
+        if agent_algorithms.registry.estimator_name(self.config.algorithm.adv_estimator) != "opd":
+            return {}
+        metrics = agent_algorithms.compute_opd_metrics(batch, self.config.algorithm)
+        rows_per_update = (
+            self.config.actor_rollout_ref.actor.ppo_mini_batch_size * self.config.actor_rollout_ref.rollout.n
+        )
+        optimizer_steps = math.ceil(len(batch) / rows_per_update)
+        metrics["opd/optimizer_steps"] = float(optimizer_steps)
+        if optimizer_steps > 1 and not self._warned_opd_optimizer_steps:
+            self._warned_opd_optimizer_steps = True
+            print(
+                f"[OPD] WARNING: {len(batch)} rows with ppo_mini_batch_size x rollout.n = {rows_per_update} give "
+                f"{optimizer_steps} optimizer steps per batch; later steps are off-policy (logged as opd/optimizer_steps)"
+            )
+        return metrics
 
     def _agent_rollout_options(self):
         """Separate the legacy conversion setting without mutating user config."""
@@ -1525,6 +1604,11 @@ class RayPPOTrainer:
                             generation_config=self.config.agent.run_config.generation_config,
                             max_concurrent_chains=self.config.agent.run_config.max_concurrent_chains,
                             context_config=self.config.agent.run_config.context_config,
+                            # The rollout strategy is constructed per call, so the step
+                            # for agent/rollout/* has to come from the trainer; without
+                            # it every step logs the same x and the metrics render as a
+                            # single bar instead of a curve.
+                            global_step=self.global_steps,
                         ))
                         gen_batch_output = self.agent_wrapper.to_verl_dataproto(
                             run_result,
@@ -1596,6 +1680,9 @@ class RayPPOTrainer:
                         with marked_timer("teacher", timing_raw, color="cyan"):
                             batch_teacher = self._compute_teacher_colocate(batch)
                             batch = batch.union(batch_teacher)
+
+                    # AgentFly teacher step: scores in the background while reward / old_log_prob / ref run.
+                    pending_agent_teacher = self._start_agent_teacher(batch)
 
                     # if "response_mask" not in batch.batch.keys():
                     #     batch.batch["response_mask"] = compute_response_mask(batch)
@@ -1727,6 +1814,10 @@ class RayPPOTrainer:
                             # IS and off-policy metrics already have rollout_corr/ prefix
                             metrics.update(is_metrics)
 
+                        if pending_agent_teacher is not None:
+                            with marked_timer("teacher", timing_raw, color="cyan"):
+                                self._finish_agent_teacher(pending_agent_teacher, batch, metrics)
+
                         # compute advantages, executed on the driver process
                         norm_adv_by_std_in_grpo = self.config.algorithm.get(
                             "norm_adv_by_std_in_grpo", True
@@ -1828,6 +1919,7 @@ class RayPPOTrainer:
                 )
                 # collect metrics
                 metrics.update(compute_data_metrics(batch=batch, use_critic=self.use_critic))
+                metrics.update(self._agent_algorithm_metrics(batch))
                 # GDPO per-component reward metrics
                 gdpo_reward_keys = self.config.algorithm.get("gdpo_reward_keys", None)
                 if gdpo_reward_keys and self.config.algorithm.adv_estimator in ("gdpo", AdvantageEstimator.GDPO):
