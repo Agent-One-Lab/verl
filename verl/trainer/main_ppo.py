@@ -390,11 +390,15 @@ class TaskRunner:
             collate_fn=collate_fn,
             train_sampler=train_sampler,
         )
-        # Initialize the workers of the trainer.
-        trainer.init_workers()
+        try:
+            # Initialize the workers of the trainer.
+            trainer.init_workers()
 
-        # Start the training process.
-        trainer.fit()
+            # Start the training process.
+            trainer.fit()
+        finally:
+            # Release environment containers whether training finished or failed.
+            trainer.close_resources()
 
 
 def create_rl_dataset(data_paths, data_config, tokenizer, processor, is_train=True, max_samples: int = -1):

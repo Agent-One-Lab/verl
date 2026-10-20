@@ -668,6 +668,12 @@ class AlgoConfig(BaseConfig):
     # teacher − student log-prob, default 5.0), think_weight (weight on thinking tokens, default 1.0),
     # task_reward_coef (λ for an added GRPO outcome advantage, default 0.0 = pure OPD).
     opd: dict[str, Any] = field(default_factory=dict)
+    # Keyword options for the estimator named by ``adv_estimator``, for estimators that read them
+    # (e.g. one defined outside AgentFly and referenced as "pkg.mod:fn"). Keys are the estimator's.
+    estimator_kwargs: dict[str, Any] = field(default_factory=dict)
+    # Extra metric functions logged every step after the advantage step, as import references
+    # ("pkg.mod:fn" or "/path/file.py:fn"); each is called as fn(batch, algorithm_config) -> dict.
+    metrics: list[str] = field(default_factory=list)
     use_kl_in_reward: bool = False
     kl_penalty: str = "kl"
     kl_ctrl: KLControlConfig = field(default_factory=KLControlConfig)

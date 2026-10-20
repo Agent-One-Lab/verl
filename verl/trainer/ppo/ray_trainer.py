@@ -153,12 +153,13 @@ def _align_batch_to_policy_space(batch: DataProto) -> DataProto:
     return batch
 
 
-def _reduce_to_trajectory(batch: DataProto) -> DataProto:
-    """Collapse a per-step DataProto to one row per ``traj_uid`` (the first row of each
-    trajectory). Outcome / ``rm_*`` fields are broadcast-constant within a trajectory, so any
+def _reduce_to_trajectory(batch: DataProto, key: str = "traj_uid") -> DataProto:
+    """Collapse a per-step / per-segment DataProto to one row per trajectory (the first row
+    of each, identified by ``key``: ``traj_uid`` for per_step, ``batch_idx`` for per_segment).
+    Outcome / ``rm_*`` fields are broadcast-constant within a trajectory, so any
     representative row is valid. Used for validation so metrics are per-EPISODE (num_chains
-    samples per prompt) rather than per-step-row (which length-weights the success rate)."""
-    traj = batch.non_tensor_batch["traj_uid"]
+    samples per prompt) rather than per-row (which length-weights the success rate)."""
+    traj = batch.non_tensor_batch[key]
     seen = set()
     idxs = []
     for i, u in enumerate(traj):
@@ -337,6 +338,13 @@ class RayPPOTrainer:
 
         self.role_worker_mapping = role_worker_mapping
         self.resource_pool_manager = resource_pool_manager
+        # An estimator defined outside AgentFly is given by import reference ("pkg.mod:fn");
+        # importing it registers it here, in the process that computes advantages.
+        self.config.algorithm.adv_estimator = agent_algorithms.resolve_estimator(
+            self.config.algorithm.adv_estimator
+        )
+        # Extra per-step metric functions, also by import reference (algorithm.metrics).
+        self._extra_metric_fns = agent_algorithms.load_metrics(self.config.algorithm.get("metrics", None))
         self.use_reference_policy = need_reference_policy(self.config)
         self.use_teacher_policy = need_teacher_policy(self.config)
         # On-policy distillation (agentfly.algorithms.opd): a teacher-scoring service fills
@@ -642,6 +650,7 @@ class RayPPOTrainer:
                 # Put agent/rollout/* on the trainer's axis. Validation reuses the
                 # training step on purpose: it must not advance that axis itself.
                 global_step=self.global_steps,
+                use_token_ids=self.config.agent.run_config.get("use_token_ids", True),
             ))
             test_output_gen_batch_padded = self.agent_wrapper.to_verl_dataproto(
                 run_result, train_on_last_turn=False,
@@ -661,7 +670,20 @@ class RayPPOTrainer:
                 self.checkpoint_manager.update_weights(self.global_steps)
 
             # unpad
-            if test_output_gen_batch_padded.meta_info.get("layout") == "per_step":
+            layout = test_output_gen_batch_padded.meta_info.get("layout")
+            if layout == "per_segment":
+                # Context folding: one row per trainable SEGMENT, so a folded trajectory has
+                # several rows. Same treatment as per_step: collapse to one row per trajectory
+                # (``batch_idx``; also drops the converter's row padding, which repeats the
+                # last row), then unpad the padding prompts.
+                reduced = _reduce_to_trajectory(test_output_gen_batch_padded, key="batch_idx")
+                if len(reduced) != len(test_gen_batch_padded):
+                    raise ValueError(
+                        f"per_segment validation: {len(reduced)} trajectories with trainable rows, "
+                        f"expected {len(test_gen_batch_padded)} (one per padded prompt)."
+                    )
+                test_output_gen_batch = unpad_dataproto(reduced, pad_size=pad_size)
+            elif layout == "per_step":
                 # Per-step rows are per-ENV-STEP, NOT prompt-aligned: ``pad_size`` counts
                 # padding PROMPTS, so unpadding the step-rows directly would drop step-rows
                 # rather than the padding trajectories. Collapse to one row per trajectory
@@ -1070,10 +1092,18 @@ class RayPPOTrainer:
         metrics.update(teacher_metrics)
 
     def _agent_algorithm_metrics(self, batch: DataProto) -> dict:
-        """Algorithm-specific metrics for AgentFly estimators (like the GDPO block for verl's)."""
-        if agent_algorithms.registry.estimator_name(self.config.algorithm.adv_estimator) != "opd":
-            return {}
-        metrics = agent_algorithms.compute_opd_metrics(batch, self.config.algorithm)
+        """Algorithm-specific metrics for AgentFly estimators (like the GDPO block for verl's).
+
+        ``algorithm.metrics`` functions run for every estimator; then OPD's block below, or the
+        estimator's ``register_metrics`` functions."""
+        name = agent_algorithms.registry.estimator_name(self.config.algorithm.adv_estimator)
+        metrics = {}
+        for fn in getattr(self, "_extra_metric_fns", ()):  # algorithm.metrics, for any estimator
+            metrics.update(fn(batch, self.config.algorithm))
+        if name != "opd":
+            metrics.update(agent_algorithms.compute_estimator_metrics(name, batch, self.config.algorithm))
+            return metrics
+        metrics.update(agent_algorithms.compute_opd_metrics(batch, self.config.algorithm))
         rows_per_update = (
             self.config.actor_rollout_ref.actor.ppo_mini_batch_size * self.config.actor_rollout_ref.rollout.n
         )
@@ -1086,6 +1116,24 @@ class RayPPOTrainer:
                 f"{optimizer_steps} optimizer steps per batch; later steps are off-policy (logged as opd/optimizer_steps)"
             )
         return metrics
+
+    def close_resources(self, timeout: float = 600.0):
+        """End every environment resource (e.g. enroot containers) the rollouts created.
+
+        Pooled resources otherwise outlive the run: nothing else ends them when training
+        stops. Runs on the background loop the environments were created on. Never raises,
+        so it cannot mask a training error.
+        """
+        bg_loop = getattr(self, "bg_loop", None)
+        if bg_loop is None or not bg_loop.is_running():
+            return
+        from ....resources import ResourceEngine
+
+        try:
+            asyncio.run_coroutine_threadsafe(ResourceEngine.close(), bg_loop).result(timeout=timeout)
+            print("[RayPPOTrainer] closed environment resources")
+        except Exception as e:  # noqa: BLE001
+            print(f"[RayPPOTrainer] closing environment resources failed: {e!r}")
 
     def _agent_rollout_options(self):
         """Separate the legacy conversion setting without mutating user config."""
@@ -1609,6 +1657,7 @@ class RayPPOTrainer:
                             # it every step logs the same x and the metrics render as a
                             # single bar instead of a curve.
                             global_step=self.global_steps,
+                            use_token_ids=self.config.agent.run_config.get("use_token_ids", True),
                         ))
                         gen_batch_output = self.agent_wrapper.to_verl_dataproto(
                             run_result,

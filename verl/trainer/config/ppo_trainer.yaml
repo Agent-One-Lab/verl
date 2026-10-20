@@ -29,6 +29,10 @@ agent:
     # A tool may override per-result by writing an explicit `control`.
     # null (open) so a run can supply arbitrary rollout kwargs via override.
     rollout_config: null
+    # Carry the sampled token ids on generated messages so sampling prompts and training
+    # rows use exactly the sampled tokens (true), or re-encode every turn from text (false).
+    # Shared by all rollouts.
+    use_token_ids: true
     generation_config:
       max_tokens: 1024
       temperature: 1.0
@@ -150,6 +154,14 @@ algorithm:
 
     # Weight of an added GRPO outcome advantage from the task reward; 0.0 = pure OPD
     task_reward_coef: 0.0
+
+  # Keyword options for the estimator named by adv_estimator (for estimators that read them,
+  # e.g. one given by import reference "pkg.mod:fn"). Keys are the estimator's own.
+  estimator_kwargs: {}
+
+  # Extra metric functions logged every step after the advantage step, as import references
+  # ("pkg.mod:fn" or "/path/file.py:fn"); each is called as fn(batch, algorithm_config) -> dict
+  metrics: []
 
   # Whether to enable in-reward KL penalty
   use_kl_in_reward: False
