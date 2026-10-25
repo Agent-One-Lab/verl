@@ -397,7 +397,8 @@ class TaskRunner:
             # Start the training process.
             trainer.fit()
         finally:
-            # Release environment containers whether training finished or failed.
+            # Stop data loader workers and release environment containers, whether training finished or failed.
+            trainer.close_dataloaders()
             trainer.close_resources()
 
 

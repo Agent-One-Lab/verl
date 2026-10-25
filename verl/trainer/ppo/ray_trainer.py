@@ -1117,6 +1117,25 @@ class RayPPOTrainer:
             )
         return metrics
 
+    def close_dataloaders(self):
+        """Stop the train/val data loaders' worker processes. Never raises.
+
+        ``fit()`` returns from inside the training-data loop, so that loader's workers keep running.
+        Ray kills them when the process exits, and PyTorch then prints "DataLoader worker ... is
+        killed by signal" after a successful run. Stopping them here avoids that.
+        """
+        for loader in (getattr(self, "train_dataloader", None), getattr(self, "val_dataloader", None)):
+            iterator = getattr(loader, "_iterator", None)
+            if iterator is None:
+                continue
+            loader._iterator = None
+            shutdown = getattr(iterator, "_shutdown_workers", None)  # only multi-process iterators have workers
+            if shutdown is not None:
+                try:
+                    shutdown()
+                except Exception as e:  # noqa: BLE001
+                    print(f"[RayPPOTrainer] stopping data loader workers failed: {e!r}")
+
     def close_resources(self, timeout: float = 600.0):
         """End every environment resource (e.g. enroot containers) the rollouts created.
 

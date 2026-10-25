@@ -14,9 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import base64
 import copy
-import io
 import json
 import logging
 import os
@@ -37,6 +35,7 @@ from PIL import Image
 from torch.utils.data import Dataset
 from transformers import PreTrainedTokenizer, ProcessorMixin
 
+from ....agents.utils.messages import row_to_messages
 from ....verl.utils.import_utils import load_extern_object
 from ....verl.utils.tokenizer import normalize_token_ids
 
@@ -78,105 +77,6 @@ def convert_parquet_to_json(parquet_file: str, json_file: str):
     records = df.to_dict(orient='records')
     with open(json_file, 'w', encoding='utf-8') as f:
         json.dump(records, f, ensure_ascii=False, indent=2)
-
-
-def any_to_pil(img: Union[Image.Image, str, dict, bytes]) -> Image.Image:
-    """
-    Convert various image formats to PIL Image.
-    
-    Args:
-        img: Image in one of the following formats:
-            - PIL Image: returned as-is
-            - str: file path to image or base64 string
-            - dict: dictionary containing image data (e.g., {"bytes": bytes_data})
-            - bytes: raw image bytes
-    
-    Returns:
-        PIL Image object
-    """
-    if isinstance(img, Image.Image):
-        return img
-    elif isinstance(img, dict):
-        if "bytes" in img:
-            img = img["bytes"]
-        else:
-            raise ValueError("Dictionary must contain 'bytes' key")
-    
-    if isinstance(img, str):
-        # Check if it's a base64 string
-        if img.startswith('data:image/'):
-            # Handle data URI format
-            import base64
-            header, encoded = img.split(',', 1)
-            img_bytes = base64.b64decode(encoded)
-            return Image.open(io.BytesIO(img_bytes))
-        elif len(img) > 100 and all(c in 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=' for c in img):
-            # Likely a base64 string (check for base64 characters and reasonable length)
-            try:
-                import base64
-                img_bytes = base64.b64decode(img)
-                return Image.open(io.BytesIO(img_bytes))
-            except Exception:
-                # If base64 decoding fails, treat as file path
-                pass
-        # Treat as file path
-        return Image.open(img)
-    elif isinstance(img, bytes):
-        return Image.open(io.BytesIO(img))
-    else:
-        raise ValueError(f"Unsupported image type: {type(img)}")
-
-def auto_resize_image(img: Image.Image, max_pixels: int = 1536 * 1536, prevent_upscale: bool = True) -> Image.Image:
-    w, h = img.size
-    area = w * h
-    if area <= max_pixels and prevent_upscale:
-        return img  # already within budget
-    scale = math.sqrt(max_pixels / area) if area > 0 else 1.0
-    new_w = max(1, int(round(w * scale)))
-    new_h = max(1, int(round(h * scale)))
-    # Use high-quality downsampling
-    return img.resize((new_w, new_h), Image.LANCZOS)
-
-
-def image_to_data_uri(img: Union[Image.Image, str, dict], fmt=None) -> str:
-    if isinstance(img, dict):
-        if "bytes" in img:
-            img = img["bytes"]
-
-    if isinstance(img, Image.Image):
-        # Try to detect format from PIL Image first
-        detected_fmt = img.format or fmt or "PNG"
-        buf = io.BytesIO()
-        img.save(buf, format=detected_fmt)
-        b64 = base64.b64encode(buf.getvalue()).decode()
-        return f"data:image/{detected_fmt.lower()};base64,{b64}"
-    elif isinstance(img, str):
-        return img
-    elif isinstance(img, bytes):
-        # Try to detect format from magic bytes
-        detected_fmt = fmt or detect_image_format_from_bytes(img)
-        return f"data:image/{detected_fmt.lower()};base64,{base64.b64encode(img).decode('utf-8')}"
-    else:
-        raise ValueError(f"Invalid image type: {type(img)}")
-
-def detect_image_format_from_bytes(img_bytes: bytes) -> str:
-    """Detect image format from bytes using magic numbers"""
-    if len(img_bytes) < 4:
-        return "PNG"  # Default fallback
-    
-    # Check magic bytes for common formats
-    if img_bytes.startswith(b'\xff\xd8\xff'):
-        return "JPEG"
-    elif img_bytes.startswith(b'\x89PNG\r\n\x1a\n'):
-        return "PNG"
-    elif img_bytes.startswith(b'GIF87a') or img_bytes.startswith(b'GIF89a'):
-        return "GIF"
-    elif img_bytes.startswith(b'RIFF') and img_bytes[8:12] == b'WEBP':
-        return "WEBP"
-    elif img_bytes.startswith(b'BM'):
-        return "BMP"
-    else:
-        return "PNG"  # Default fallback
 
 
 class RLHFDataset(Dataset):
@@ -674,65 +574,11 @@ class RLHFAgentDataset(Dataset):
     def __len__(self):
         return len(self.data)
 
-    def _process_image(self, image):
-        """
-        Process image. First limits the maximum pixels and scale it. Then convert to data URI (base64)
-        """
-        image = any_to_pil(image)
-        image = auto_resize_image(image)
-        image = image_to_data_uri(image)
-        return image
-    
     def _build_messages(self, row_dict):
-        question_keys = ['prompt', 'question', 'instruction', 'problem']
-        for key in question_keys:
-            question = None
-            if key in row_dict:
-                question = row_dict[key]
-                break
-        if question is None:
-            raise ValueError(f"question not found in row_dict: {row_dict}")
-        
-        if "image" in row_dict:
-            from ....verl.utils.dataset.vision_utils import process_image
-            # image = process_image(row_dict["image"])
-            image = row_dict["image"]
-            image = self._process_image(image)
-            # convert PIL Image to base64
-            # buffer = io.BytesIO()
-            # image.save(buffer, format="PNG")
-            # image = base64.b64encode(buffer.getvalue()).decode("utf-8")
-            
-        else:
-            image = None
-        
-        single_messages = [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": question}
-                ]
-            }
-        ]
-        if image is not None:
-            # OpenAI chat completion API only supports image_url
-            single_messages[0]["content"].append({"type": "image_url", "image_url": {"url": image}})
-        messages = {
-            "messages": single_messages,
-            "question": question,
-        }
+        # One rule for training and agent.run(): see agentfly.agents.utils.messages.row_to_messages.
+        messages = row_to_messages(row_dict)
+        return messages, messages["question"]
 
-        other_info = {}
-        for k, v in row_dict.items():
-            if k not in ['question']:
-                other_info[k] = v
-
-        messages.update(other_info)
-
-        return messages, question
-
-
-    
     def __getitem__(self, item):
         row_dict = self.data[item]
         
