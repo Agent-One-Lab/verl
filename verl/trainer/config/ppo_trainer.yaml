@@ -4,11 +4,11 @@ agent:
     model_name_or_path: null
     system_prompt: null
     template: null
-    tools:
-      - google_search
-      - answer
+    # Tools the agent may call: names, "module:attr" or "/path/file.py:attr". Empty = no tools.
+    tools: []
     max_model_len: null
-    reward_name: "qa_f1_reward"
+    # Reward to train with (a registered name or an import reference). Required for training.
+    reward_name: null
     backend_config: 
       backend: "async_verl"
     tool_parser_name: "hermes"
@@ -109,8 +109,8 @@ algorithm:
   # Trade-off between bias and variance in the GAE estimator
   lam: 1.0
 
-  # Advantage estimator type: "gae", "grpo", "reinforce_plus_plus", etc.
-  adv_estimator: gae
+  # Advantage estimator type: "grpo", "gae" (needs a critic), "reinforce_plus_plus", etc.
+  adv_estimator: grpo
 
   # Whether to normalize advantages by std (specific to GRPO)
   norm_adv_by_std_in_grpo: True

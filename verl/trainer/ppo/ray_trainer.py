@@ -319,6 +319,11 @@ class RayPPOTrainer:
         # Before starting the training, clear all enroot containers
         # clear_enroot_containers()
         print(f"Config.Agent: {config.agent}")
+        if not config.agent.init_config.get("reward_name"):
+            raise ValueError(
+                "Set agent.init_config.reward_name to the reward to train with "
+                "(a registered name such as math_equal_reward_tool, or 'module:attr')."
+            )
         self.agent_wrapper = AutoAgent.from_config(config.agent.init_config)
         # set jinja template for vllm rollout
         self.config.actor_rollout_ref.rollout.chat_template = self.agent_wrapper.jinja_template
@@ -1159,7 +1164,7 @@ class RayPPOTrainer:
         rollout_config = dict(self.config.agent.run_config.get("rollout_config") or {})
         # Preserve existing trainer configs, but never pass training diagnostics
         # into a rollout constructor. The converter alone owns this setting.
-        log_token_drift = rollout_config.pop("log_token_drift", True)
+        log_token_drift = rollout_config.pop("log_token_drift", False)
         return rollout_config, log_token_drift
     
     def _save_checkpoint(self):
