@@ -15,8 +15,8 @@ agent:
     agent_type: "code"
   run_config:
     max_turns: 4
-    num_chains: 5
-    max_concurrent_chains: null
+    group_size: 5
+    max_concurrent_episodes: null
     # Rollout strategy: "chain" (full-history multi-turn) or "step" (verl-agent-style
     # bounded per-step; layout=per_step routes to the per-step GiGPO estimator).
     rollout: "chain"

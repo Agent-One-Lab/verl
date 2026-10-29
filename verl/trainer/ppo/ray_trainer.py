@@ -157,7 +157,7 @@ def _reduce_to_trajectory(batch: DataProto, key: str = "traj_uid") -> DataProto:
     """Collapse a per-step / per-segment DataProto to one row per trajectory (the first row
     of each, identified by ``key``: ``traj_uid`` for per_step, ``batch_idx`` for per_segment).
     Outcome / ``rm_*`` fields are broadcast-constant within a trajectory, so any
-    representative row is valid. Used for validation so metrics are per-EPISODE (num_chains
+    representative row is valid. Used for validation so metrics are per-EPISODE (group_size
     samples per prompt) rather than per-row (which length-weights the success rate)."""
     traj = batch.non_tensor_batch[key]
     seen = set()
@@ -646,11 +646,11 @@ class RayPPOTrainer:
             run_result = self.run_on_bg(self.agent_wrapper.run(
                 max_turns=self.config.agent.run_config.max_turns,
                 messages=test_gen_batch_padded.non_tensor_batch["messages"],
-                num_chains=1,
+                group_size=1,
                 rollout=self.config.agent.run_config.get("rollout", "chain"),
                 rollout_config=rollout_config,
                 generation_config=generation_config,
-                max_concurrent_chains=self.config.agent.run_config.max_concurrent_chains,
+                max_concurrent_episodes=self.config.agent.run_config.max_concurrent_episodes,
                 context_config=self.config.agent.run_config.context_config,
                 # Put agent/rollout/* on the trainer's axis. Validation reuses the
                 # training step on purpose: it must not advance that axis itself.
@@ -1670,11 +1670,11 @@ class RayPPOTrainer:
                         run_result = self.run_on_bg(self.agent_wrapper.run(
                             max_turns=self.config.agent.run_config.max_turns,
                             messages=gen_batch.non_tensor_batch["messages"],
-                            num_chains=self.config.agent.run_config.num_chains,
+                            group_size=self.config.agent.run_config.group_size,
                             rollout=self.config.agent.run_config.get("rollout", "chain"),
                             rollout_config=rollout_config,
                             generation_config=self.config.agent.run_config.generation_config,
-                            max_concurrent_chains=self.config.agent.run_config.max_concurrent_chains,
+                            max_concurrent_episodes=self.config.agent.run_config.max_concurrent_episodes,
                             context_config=self.config.agent.run_config.context_config,
                             # The rollout strategy is constructed per call, so the step
                             # for agent/rollout/* has to come from the trainer; without
@@ -1726,7 +1726,7 @@ class RayPPOTrainer:
                             del rm_scores, gen_baseline_batch, gen_baseline_output
                     # repeat to align with repeated responses in rollout
 
-                    batch = batch.repeat(repeat_times=self.config.agent.run_config.num_chains, interleave=False)
+                    batch = batch.repeat(repeat_times=self.config.agent.run_config.group_size, interleave=False)
                     # if self.config.agent.train_on_last_turn:
                     batch = batch.repeat(repeat_times=gen_batch_output.meta_info["repeat_times"], interleave=False)
 
