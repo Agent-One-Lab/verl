@@ -13,6 +13,9 @@ agent:
       backend: "async_verl"
     tool_parser_name: "hermes"
     agent_type: "code"
+    # Subagents the agent can create, as {name: settings}; settings are the agent's own
+    # (system_prompt, tools, max_model_len, ...). Built on demand, sharing the engine.
+    subagents: null
   run_config:
     max_turns: 4
     group_size: 5
