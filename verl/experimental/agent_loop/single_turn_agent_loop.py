@@ -77,6 +77,12 @@ class SingleTurnAgentLoop(AgentLoopBase):
         # 3. generate sequences
         metrics = {}
 
+        # Routing replay over several turns: the caller already holds the expert choices of the first
+        # ``routed_experts_prompt_start`` positions (earlier turns), so the engine returns only the rest.
+        routed_start = kwargs.get("routed_experts_prompt_start")
+        if routed_start is not None and int(routed_start) > 0:
+            sampling_params = {**sampling_params, "routed_experts_prompt_start": int(routed_start)}
+
         logger.debug(f"[SingleTurnAgentLoop] sampling params: {sampling_params}")
         
         with simple_timer("generate_sequences", metrics):

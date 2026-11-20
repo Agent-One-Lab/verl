@@ -30,6 +30,7 @@ from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from torch.distributed.fsdp.api import FullStateDictConfig, ShardedStateDictConfig, StateDictType
 from torch.distributed.tensor import DTensor
 
+from .....verl.models.transformers.k2_horizon import get_routing_replay, install_routing_replay
 from .....verl.utils import torch_functional as verl_F
 from .....verl.models.transformers.monkey_patch import apply_monkey_patch
 from .....verl.trainer.config import CheckpointConfig
@@ -282,6 +283,12 @@ class FSDPEngine(BaseEngine):
                 use_fused_kernels=use_fused_kernels,
                 fused_kernels_backend=fused_kernels_backend,
             )
+
+            if getattr(self.model_config.hf_config, "model_type", None) == "k2_horizon":
+                # Rollout routing replay: a batch that carries the experts the rollout engine chose
+                # (``routed_experts``) is forwarded with those choices; see models/transformers/k2_horizon.py.
+                # Before the FSDP wrap, so the hooks sit on the model's own modules.
+                install_routing_replay(module)
 
             # some parameters may not in torch_dtype
             module.to(torch_dtype)
@@ -871,6 +878,26 @@ class EngineTrainModeCtx(BaseEngineCtx):
 
 @EngineRegistry.register(model_type="language_model", backend=["fsdp", "fsdp2"], device=["cuda", "npu"])
 class FSDPEngineWithLMHead(FSDPEngine):
+    def _attach_routing_replay(self, micro_batch: TensorDict, model_inputs: dict) -> None:
+        """Hand the micro-batch's recorded expert choices to a model with routing replay installed, in the
+        layout of the forward pass. It stays attached for the backward pass (gradient checkpointing runs the
+        layers again); a micro-batch without a record detaches the previous one."""
+        replay = get_routing_replay(self.module)
+        if replay is None:
+            return
+        routed = micro_batch.get("routed_experts", None)
+        if routed is None:
+            replay.set(None)
+            return
+        if self.use_ulysses_sp:
+            raise NotImplementedError("routing replay does not support Ulysses sequence parallelism")
+        if model_inputs.get("attention_mask") is not None:
+            raise NotImplementedError("routing replay needs the remove-padding path (model.use_remove_padding=True)")
+        if routed.is_nested:  # the trainer's unpadded layout (workers/utils/padding.py), aligned with input_ids
+            replay.set(routed)
+        else:
+            replay.set(routed, lengths=micro_batch["input_ids"].offsets().diff(), packed=True)
+
     def prepare_model_inputs(self, micro_batch: TensorDict):
         use_remove_padding = tu.get_non_tensor_data(data=micro_batch, key="use_remove_padding", default=True)
         pad_mode = tu.get_non_tensor_data(data=micro_batch, key="pad_mode", default=DatasetPadMode.NO_PADDING)
@@ -1147,6 +1174,7 @@ class FSDPEngineWithLMHead(FSDPEngine):
         # actually, we should avoid assigning like this...
         micro_batch = micro_batch.to(get_device_id())
         model_inputs, output_args = self.prepare_model_inputs(micro_batch=micro_batch)
+        self._attach_routing_replay(micro_batch, model_inputs)
 
         with torch.autocast(device_type=device_name, dtype=torch.bfloat16):
             raw_output = self.module(

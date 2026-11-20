@@ -23,10 +23,19 @@ import vllm
 from packaging import version
 
 try:
-    from vllm.model_executor.layers.fused_moe.layer import FusedMoE
     from vllm.model_executor.layers.linear import LinearBase
 except ImportError as e:
     raise ImportError("FP8 quantization not available") from e
+
+try:
+    from vllm.model_executor.layers.fused_moe.layer import FusedMoE
+except ImportError:
+    # vLLM >= 0.30 builds MoE layers through FusedMoEFactory and has no FusedMoE class. The rollout imports
+    # this module for every model, so it must still import; only FP8 MoE weights need the class, and a
+    # placeholder that no module is an instance of leaves every other path as it was. Loading FP8 weights
+    # into a MoE model on such a vLLM is not supported here.
+    class FusedMoE:  # noqa: D101
+        pass
 
 from ....verl.utils.kernel.fp8_kernel import scaled_fp8_blockwise
 

@@ -478,32 +478,6 @@ class MegatronCheckpointManager(BaseCheckpointManager):
             else:
                 self.bridge.load_hf_weights(self.model, hf_model_path)
             log_with_rank(f"Loaded HF model checkpoint from {hf_model_path} with bridge", rank=self.rank, logger=logger)
-<<<<<<< HEAD
-        # Load PEFT adapter checkpoint if available
-        if self.should_load_model and self.peft_cls is not None:
-            adapter_ckpt_path = os.path.join(local_path, "adapter_checkpoint")
-            if os.path.exists(adapter_ckpt_path):
-                from ....verl.utils.megatron_peft_utils import load_adapter_checkpoint
-
-                # TODO: a better format for adapter checkpoint, waiting megatron-bridge support
-
-                load_adapter_checkpoint(
-                    self.model,
-                    adapter_ckpt_path,
-                )
-                log_with_rank(
-                    f"Loaded adapter checkpoint from {adapter_ckpt_path}",
-                    rank=self.rank,
-                    logger=logger,
-                )
-            else:
-                log_with_rank(
-                    f"PEFT config is set but no adapter checkpoint found at {adapter_ckpt_path}",
-                    rank=self.rank,
-                    logger=logger,
-                )
-=======
->>>>>>> main
 
         if self.should_load_optimizer:
             assert "optimizer" in state_dict, (
@@ -609,28 +583,6 @@ class MegatronCheckpointManager(BaseCheckpointManager):
                 torch.distributed.barrier()
 
         if self.should_save_model:
-<<<<<<< HEAD
-            # Save adapter-only checkpoint if PEFT is enabled
-            if self.peft_cls is not None:
-                from ....verl.utils.megatron_peft_utils import save_adapter_checkpoint
-
-                adapter_ckpt_path = os.path.join(local_path, "adapter_checkpoint")
-
-                # Save adapter weights only (much smaller than full model)
-                save_adapter_checkpoint(
-                    self.model,
-                    adapter_ckpt_path,
-                    self.rank,
-                )
-
-                log_with_rank(
-                    f"Saved adapter-only checkpoint to {adapter_ckpt_path}",
-                    rank=self.rank,
-                    logger=logger,
-                    log_only_rank_0=True,
-                )
-=======
->>>>>>> main
             if self.use_hf_checkpoint:
                 # Use mbridge to save HF model checkpoint
                 log_with_rank(f"Saving HF model checkpoint to {local_path} with bridge", rank=self.rank, logger=logger)
