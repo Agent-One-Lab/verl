@@ -87,7 +87,8 @@ class SingleTurnAgentLoop(AgentLoopBase):
         
         with simple_timer("generate_sequences", metrics):
             output: TokenOutput = await self.server_manager.generate(
-                request_id=uuid4().hex,
+                # AgentFly's key for this agent session: its turns stay on one engine, so the prefix cache hits.
+                request_id=kwargs.get("routing_key") or uuid4().hex,
                 prompt_ids=prompt_ids,
                 sampling_params=sampling_params,
                 image_data=images,

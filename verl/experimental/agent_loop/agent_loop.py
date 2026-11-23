@@ -440,6 +440,9 @@ class AgentLoopWorker:
             reward_loop_worker_handles (list[ray.actor.ActorHandle]): Actor handles for streaming reward computation.
             teacher_servers (list[tuple[str, ray.actor.ActorHandle]]): (address, handle) pairs for each teacher server.
         """
+        from ....utils.loop_sampler import start_loop_sampler
+
+        start_loop_sampler("agent_loop_worker")  # no-op unless AF_LOOP_SAMPLER_DIR is set
         self.config = config
         rollout_config, model_config = _get_rollout_and_model_config(config)
         self.rollout_config: RolloutConfig = omega_conf_to_dataclass(rollout_config)
@@ -593,6 +596,7 @@ class AgentLoopWorker:
         for i in range(len(batch)):
             trace_this_sample = i in traced_indices
             kwargs = {k: v[i] for k, v in batch.non_tensor_batch.items()}
+            kwargs["_single_row"] = len(batch) == 1
             tasks.append(
                 asyncio.create_task(
                     self._run_agent_loop(sampling_params, trajectory_info[i], trace=trace_this_sample, **kwargs)
@@ -676,12 +680,19 @@ class AgentLoopWorker:
         # - position_ids: sequential positions for tokens, starting at 0
         #   e.g., [0,0,0,0,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,0,0,0,0]
 
+        # AgentFly's one-row text turns: it rendered the prompt, reads back only the response, and rebuilds the
+        # training rows itself (agents.utils.tokenizer). No padding to the full width, vision processing or rope
+        # positions for them. Vision rows, batches and every other caller keep the full path.
+        compact = self._compact_output(output, kwargs)
+        prompt_width = max(len(output.prompt_ids), 1) if compact else self.rollout_config.prompt_length
+        response_width = max(len(output.response_ids), 1) if compact else self.rollout_config.response_length
+
         # TODO(wuxibin): remove padding and use tensordict.
         self.tokenizer.padding_side = "left"
         prompt_output = self.tokenizer.pad(
             {"input_ids": output.prompt_ids},
             padding="max_length",
-            max_length=self.rollout_config.prompt_length,
+            max_length=prompt_width,
             return_tensors="pt",
             return_attention_mask=True,
         )
@@ -693,7 +704,7 @@ class AgentLoopWorker:
         response_output = self.tokenizer.pad(
             {"input_ids": output.response_ids},
             padding="max_length",
-            max_length=self.rollout_config.response_length,
+            max_length=response_width,
             return_tensors="pt",
             return_attention_mask=True,
         )
@@ -704,7 +715,7 @@ class AgentLoopWorker:
         response_mask_output = self.tokenizer.pad(
             {"input_ids": output.response_mask},
             padding="max_length",
-            max_length=self.rollout_config.response_length,
+            max_length=response_width,
             return_tensors="pt",
             return_attention_mask=False,
         )
@@ -713,7 +724,7 @@ class AgentLoopWorker:
 
         response_logprobs = None
         if output.response_logprobs is not None:
-            pad_size = self.rollout_config.response_length - len(output.response_logprobs)
+            pad_size = response_width - len(output.response_logprobs)
             response_logprobs = torch.tensor(output.response_logprobs + [0.0] * pad_size).unsqueeze(0)
 
         response_mask = response_mask_output["input_ids"] * response_output["attention_mask"]
@@ -747,8 +758,12 @@ class AgentLoopWorker:
 
             routed_experts[:, start_pos:end_pos] = experts_tensor.unsqueeze(0)
 
-        multi_modal_inputs = self._compute_multi_modal_inputs(output, input_ids)
-        position_ids = self._compute_position_ids(input_ids, attention_mask, multi_modal_inputs)
+        if compact:
+            multi_modal_inputs = None
+            position_ids = compute_position_id_with_mask(attention_mask)
+        else:
+            multi_modal_inputs = self._compute_multi_modal_inputs(output, input_ids)
+            position_ids = self._compute_position_ids(input_ids, attention_mask, multi_modal_inputs)
         await self._compute_score(
             output,
             prompts=prompt_output["input_ids"],
@@ -799,6 +814,19 @@ class AgentLoopWorker:
             num_turns=output.num_turns,
             metrics=output.metrics,
             extra_fields=output.extra_fields,
+        )
+
+    def _compact_output(self, output, kwargs) -> bool:
+        """Whether this turn can skip the padded, vision-aware output: a one-row call whose prompt AgentFly
+        rendered, with no image or video, and no reward or teacher worker reading the padded tensors."""
+        data = output.multi_modal_data or {}
+        return bool(
+            kwargs.get("_single_row")
+            and kwargs.get("prompt_ids") is not None
+            and data.get("images") is None
+            and data.get("videos") is None
+            and self.reward_loop_worker_handles is None
+            and not self.distillation_enabled
         )
 
     def _compute_multi_modal_inputs(self, output, input_ids) -> dict[str, torch.Tensor]:
@@ -1063,6 +1091,7 @@ class AgentLoopManager:
         self.worker_group = worker_group
         self.rollout_resource_pool = rollout_resource_pool
         self.reward_loop_worker_handles = reward_loop_worker_handles
+        self._next_worker = 0  # where the next call's first row goes (see _distribute_batch_round_robin)
 
         self.teacher_model_manager = teacher_model_manager
         self.distillation_enabled = is_distillation_enabled(self.config.get("distillation", None))
@@ -1230,7 +1259,10 @@ class AgentLoopManager:
     def _distribute_batch_round_robin(
         self, prompts: DataProto
     ) -> tuple[list[Optional[DataProto]], list[int], list[int]]:
-        """Assign each sample to a worker by ``index % num_workers`` for load balancing.
+        """Assign each sample to a worker in turn, continuing from where the previous call stopped.
+
+        AgentFly sends each agent turn as its own one-row call, so a position counted within the call
+        would send every turn to worker 0.
 
         Returns:
             chunks_by_worker: length ``num_workers``; entry ``w`` is the sub-batch for worker
@@ -1245,9 +1277,11 @@ class AgentLoopManager:
         n = len(prompts)
         chunks_by_worker: list[Optional[DataProto]] = [None] * num_workers
         original_indices: list[int] = []
+        start = self._next_worker % num_workers
+        self._next_worker = (start + n) % num_workers
 
         for w in range(num_workers):
-            idxs = [i for i in range(n) if i % num_workers == w]
+            idxs = [i for i in range(n) if (start + i) % num_workers == w]
             if not idxs:
                 continue
             chunks_by_worker[w] = prompts.select_idxs(idxs)
@@ -1259,7 +1293,7 @@ class AgentLoopManager:
     async def generate_sequences_async(self, prompts: DataProto) -> DataProto:
         """Round-robin dispatch across workers for load balancing; restore sample order after gather.
 
-        Sample ``i`` goes to worker ``i % num_workers``. Uses ``asyncio.wrap_future`` on Ray
+        Rows go to workers in turn, across calls. Uses ``asyncio.wrap_future`` on Ray
         ObjectRefs so multiple concurrent requests can await work without blocking the event loop.
 
         Args:

@@ -648,7 +648,7 @@ class RayPPOTrainer:
                 messages=test_gen_batch_padded.non_tensor_batch["messages"],
                 group_size=1,
                 rollout=self.config.agent.run_config.get("rollout", "chain"),
-                rollout_config=rollout_config,
+                rollout_config={**rollout_config, "branch": False},  # no branch leaves in validation
                 generation_config=generation_config,
                 max_concurrent_episodes=self.config.agent.run_config.max_concurrent_episodes,
                 context_config=self.config.agent.run_config.context_config,
@@ -1785,6 +1785,14 @@ class RayPPOTrainer:
 
                         # extract reward_tensor and reward_extra_infos_dict for training
                         reward_tensor, reward_extra_infos_dict = extract_reward(batch)
+                    # Oversample-and-filter: when data.gen_batch_size oversamples prompts and
+                    # algorithm.filter_groups.enable is set, drop zero-variance groups and keep a
+                    # constant train_batch_size of groups (the team's dynamic sampling). No-op otherwise.
+                    from agentfly.algorithms.oversample import apply_oversample_filter
+
+                    batch, reward_tensor, reward_extra_infos_dict = apply_oversample_filter(
+                        self.config, batch, reward_tensor, reward_extra_infos_dict
+                    )
                     # Operating Mode Selection:
                     # - Bypass mode: Sets old_log_probs = rollout_log_probs (2 policies: π_rollout, π_θ)
                     # - Decoupled mode: Recomputes old_log_probs as proximal anchor (3 policies: π_rollout, π_old, π_θ)

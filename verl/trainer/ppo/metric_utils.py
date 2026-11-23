@@ -142,6 +142,11 @@ def compute_data_metrics(batch: DataProto, use_critic: bool = True) -> Dict[str,
 
     non_aborted_sequence_score = sequence_score[non_aborted_mask]
     non_aborted_sequence_reward = sequence_reward[non_aborted_mask]
+    if non_aborted_sequence_score.numel() == 0:
+        # Every sample aborted (e.g. a whole batch masked out as zero-variance): fall back to the
+        # full set so the metric reductions below don't call max()/min() on an empty tensor.
+        non_aborted_sequence_score = sequence_score
+        non_aborted_sequence_reward = sequence_reward
 
     score_mean = torch.mean(non_aborted_sequence_score).detach().item()
     score_max = torch.max(non_aborted_sequence_score).detach().item()
