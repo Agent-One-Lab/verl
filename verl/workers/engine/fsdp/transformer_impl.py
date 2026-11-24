@@ -284,7 +284,10 @@ class FSDPEngine(BaseEngine):
                 fused_kernels_backend=fused_kernels_backend,
             )
 
-            if getattr(self.model_config.hf_config, "model_type", None) == "k2_horizon":
+            hf_config = self.model_config.hf_config
+            routed = getattr(hf_config, "num_experts", 0) or getattr(hf_config, "mova_num_experts", 0)
+            # A dense K2-Horizon (e.g. the 3.7B) has no routers: nothing to replay.
+            if getattr(hf_config, "model_type", None) == "k2_horizon" and routed:
                 # Rollout routing replay: a batch that carries the experts the rollout engine chose
                 # (``routed_experts``) is forwarded with those choices; see models/transformers/k2_horizon.py.
                 # Before the FSDP wrap, so the hooks sit on the model's own modules.

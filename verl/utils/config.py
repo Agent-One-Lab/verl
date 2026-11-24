@@ -108,10 +108,19 @@ def validate_config(
         # 1. Check total batch size for data correctness
         real_train_batch_size = config.data.train_batch_size * config.agent.run_config.group_size
         
-        assert real_train_batch_size % minimal_bsz == 0, (
-            f"real_train_batch_size ({real_train_batch_size}) must be divisible by minimal possible batch size "
-            f"({minimal_bsz})"
-        )
+        # An agent episode becomes one or more training rows, and the rows (not the episodes) are padded to a
+        # multiple of ppo_mini_batch_size before they are split over the GPUs; there the mini-batch must divide by
+        # the GPU count instead.
+        if config.get("agent", {}).get("use_agent", False):
+            mini = config.actor_rollout_ref.actor.ppo_mini_batch_size
+            assert mini % minimal_bsz == 0, (
+                f"ppo_mini_batch_size ({mini}) must be divisible by minimal possible batch size ({minimal_bsz})"
+            )
+        else:
+            assert real_train_batch_size % minimal_bsz == 0, (
+                f"real_train_batch_size ({real_train_batch_size}) must be divisible by minimal possible batch size "
+                f"({minimal_bsz})"
+            )
 
     # A helper function to check "micro_batch_size" vs "micro_batch_size_per_gpu"
     # We throw an error if the user sets both. The new convention is "..._micro_batch_size_per_gpu".
